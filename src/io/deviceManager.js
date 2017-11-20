@@ -1,6 +1,5 @@
 const got = require('got');
 const io = require('socket.io-client/dist/socket.io');
-const querystring = require('querystring');
 
 /**
  * Internal class used by the Device Manager client to manage making a connection to a particular device.
@@ -311,7 +310,7 @@ class DeviceManager {
             name: extensionName
         };
         if (deviceSpec) queryObject.spec = deviceSpec;
-        const url = `${this._serverURL}/${encodeURIComponent(deviceType)}/list?${querystring.stringify(queryObject)}`;
+        const url = `${this._serverURL}/${encodeURIComponent(deviceType)}/list?data=${JSON.stringify(queryObject)}`;
         return got(url).then(response => JSON.parse(response.body));
     }
 
