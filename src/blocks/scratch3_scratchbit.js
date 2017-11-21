@@ -254,7 +254,7 @@ class Scratch3ScratchBitBlocks {
      * @return {number} - the tilt sensor counts as "tilted" if its tilt angle meets or exceeds this threshold.
      */
     static get DARK_THRESHOLD () {
-        return 10;
+        return 15;
     }
 
     /**
