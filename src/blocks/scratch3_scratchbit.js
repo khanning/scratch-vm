@@ -313,6 +313,18 @@ class Scratch3ScratchBitBlocks {
                     blockType: BlockType.REPORTER
                 },
                 {
+                    opcode: 'whenTilted',
+                    text: 'when tilted [DIRECTION]?',
+                    blockType: BlockType.HAT,
+                    arguments: {
+                        DIRECTION: {
+                            type: ArgumentType.STRING,
+                            menu: 'tiltDirectionAny',
+                            defaultValue: TiltDirection.ANY
+                        }
+                    }
+                },
+                {
                     opcode: 'isTilted',
                     text: 'tilted [DIRECTION]?',
                     blockType: BlockType.BOOLEAN,
