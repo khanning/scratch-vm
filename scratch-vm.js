@@ -19902,11 +19902,26 @@ var ScratchBit = function () {
         value: function _isGesture(g) {
             switch (g) {
                 case Gesture.MOVE:
-                    return Math.abs(this._sensors.aMagD) > 0.01 && Math.abs(this._sensors.aMagD) < 0.3;
+                    if (Math.abs(this._sensors.aMagD) < 0.13 || GestureTimeout.MOVE) return false;
+                    GestureTimeout.MOVE = true;
+                    setTimeout(function () {
+                        GestureTimeout.MOVE = false;
+                    }, 250);
+                    return true;
                 case Gesture.SHAKE:
-                    return Math.abs(this._sensors.aMagD) > 1;
+                    if (Math.abs(this._sensors.aMagD) < 0.9 || GestureTimeout.SHAKE) return false;
+                    GestureTimeout.SHAKE = true;
+                    setTimeout(function () {
+                        GestureTimeout.SHAKE = false;
+                    }, 300);
+                    return true;
                 case Gesture.JUMP:
-                    return this._sensors.aMag < 0.2;
+                    if (this._sensors.aMag > 0.2 || GestureTimeout.JUMP) return false;
+                    GestureTimeout.JUMP = true;
+                    setTimeout(function () {
+                        GestureTimeout.JUMP = false;
+                    }, 500);
+                    return true;
                 default:
                     return false;
             }
@@ -20065,8 +20080,8 @@ var DEV_SPEC = {
  * @enum {string}
  */
 var TiltDirection = {
-    UP: 'up',
-    DOWN: 'down',
+    FRONT: 'front',
+    BACK: 'back',
     LEFT: 'left',
     RIGHT: 'right',
     ANY: 'any'
@@ -20076,6 +20091,12 @@ var Gesture = {
     MOVE: 'move',
     SHAKE: 'shake',
     JUMP: 'jump'
+};
+
+var GestureTimeout = {
+    MOVE: false,
+    SHAKE: false,
+    JUMP: false
 };
 
 /**
@@ -20111,7 +20132,7 @@ var Scratch3ScratchBitBlocks = function () {
     }, {
         key: 'DARK_THRESHOLD',
         get: function get() {
-            return 10;
+            return 15;
         }
 
         /**
@@ -20176,6 +20197,17 @@ var Scratch3ScratchBitBlocks = function () {
                     text: 'brightness',
                     blockType: BlockType.REPORTER
                 }, {
+                    opcode: 'whenTilted',
+                    text: 'when tilted [DIRECTION]?',
+                    blockType: BlockType.HAT,
+                    arguments: {
+                        DIRECTION: {
+                            type: ArgumentType.STRING,
+                            menu: 'tiltDirectionAny',
+                            defaultValue: TiltDirection.ANY
+                        }
+                    }
+                }, {
                     opcode: 'isTilted',
                     text: 'tilted [DIRECTION]?',
                     blockType: BlockType.BOOLEAN,
@@ -20194,13 +20226,13 @@ var Scratch3ScratchBitBlocks = function () {
                         DIRECTION: {
                             type: ArgumentType.STRING,
                             menu: 'tiltDirection',
-                            defaultValue: TiltDirection.UP
+                            defaultValue: TiltDirection.FRONT
                         }
                     }
                 }],
                 menus: {
-                    tiltDirection: [TiltDirection.UP, TiltDirection.DOWN, TiltDirection.LEFT, TiltDirection.RIGHT],
-                    tiltDirectionAny: [TiltDirection.UP, TiltDirection.DOWN, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
+                    tiltDirection: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT],
+                    tiltDirectionAny: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
                 }
             };
         }
@@ -20269,7 +20301,7 @@ var Scratch3ScratchBitBlocks = function () {
         /**
          * Test whether the tilt sensor is currently tilted.
          * @param {object} args - the block's arguments.
-         * @property {TiltDirection} DIRECTION - the tilt direction to test (up, down, left, right, or any).
+         * @property {TiltDirection} DIRECTION - the tilt direction to test (front, back, left, right, or any).
          * @return {boolean} - true if the tilt sensor is tilted past a threshold in the specified direction.
          */
 
@@ -20292,7 +20324,7 @@ var Scratch3ScratchBitBlocks = function () {
         /**
          * Test whether the tilt sensor is currently tilted.
          * @param {object} args - the block's arguments.
-         * @property {TiltDirection} DIRECTION - the tilt direction to test (up, down, left, right, or any).
+         * @property {TiltDirection} DIRECTION - the tilt direction to test (front, back, left, right, or any).
          * @return {boolean} - true if the tilt sensor is tilted past a threshold in the specified direction.
          */
 
@@ -20304,9 +20336,9 @@ var Scratch3ScratchBitBlocks = function () {
 
         /**
          * @param {object} args - the block's arguments.
-         * @property {TiltDirection} DIRECTION - the direction (up, down, left, right) to check.
+         * @property {TiltDirection} DIRECTION - the direction (front, back, left, right) to check.
          * @return {number} - the tilt sensor's angle in the specified direction.
-         * Note that getTiltAngle(up) = -getTiltAngle(down) and getTiltAngle(left) = -getTiltAngle(right).
+         * Note that getTiltAngle(front) = -getTiltAngle(back) and getTiltAngle(left) = -getTiltAngle(right).
          */
 
     }, {
@@ -20317,7 +20349,7 @@ var Scratch3ScratchBitBlocks = function () {
 
         /**
          * Test whether the tilt sensor is currently tilted.
-         * @param {TiltDirection} direction - the tilt direction to test (up, down, left, right, or any).
+         * @param {TiltDirection} direction - the tilt direction to test (front, back, left, right, or any).
          * @return {boolean} - true if the tilt sensor is tilted past a threshold in the specified direction.
          * @private
          */
@@ -20334,9 +20366,9 @@ var Scratch3ScratchBitBlocks = function () {
         }
 
         /**
-         * @param {TiltDirection} direction - the direction (up, down, left, right) to check.
+         * @param {TiltDirection} direction - the direction (front, back, left, right) to check.
          * @return {number} - the tilt sensor's angle in the specified direction.
-         * Note that getTiltAngle(up) = -getTiltAngle(down) and getTiltAngle(left) = -getTiltAngle(right).
+         * Note that getTiltAngle(front) = -getTiltAngle(back) and getTiltAngle(left) = -getTiltAngle(right).
          * @private
          */
 
@@ -20344,9 +20376,9 @@ var Scratch3ScratchBitBlocks = function () {
         key: '_getTiltAngle',
         value: function _getTiltAngle(direction) {
             switch (direction) {
-                case TiltDirection.UP:
+                case TiltDirection.FRONT:
                     return this._device.tiltY;
-                case TiltDirection.DOWN:
+                case TiltDirection.BACK:
                     return -this._device.tiltY;
                 case TiltDirection.LEFT:
                     return -this._device.tiltX;
