@@ -218,8 +218,8 @@ const DEV_SPEC = {
  * @enum {string}
  */
 const TiltDirection = {
-    UP: 'up',
-    DOWN: 'down',
+    FRONT: 'front',
+    BACK: 'back',
     LEFT: 'left',
     RIGHT: 'right',
     ANY: 'any'
@@ -344,15 +344,15 @@ class Scratch3ScratchBitBlocks {
                         DIRECTION: {
                             type: ArgumentType.STRING,
                             menu: 'tiltDirection',
-                            defaultValue: TiltDirection.UP
+                            defaultValue: TiltDirection.FRONT
                         }
                     }
                 }
             ],
             menus: {
-                tiltDirection: [TiltDirection.UP, TiltDirection.DOWN, TiltDirection.LEFT, TiltDirection.RIGHT],
+                tiltDirection: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT],
                 tiltDirectionAny:
-                    [TiltDirection.UP, TiltDirection.DOWN, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
+                    [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
             }
         };
     }
@@ -413,7 +413,7 @@ class Scratch3ScratchBitBlocks {
     /**
      * Test whether the tilt sensor is currently tilted.
      * @param {object} args - the block's arguments.
-     * @property {TiltDirection} DIRECTION - the tilt direction to test (up, down, left, right, or any).
+     * @property {TiltDirection} DIRECTION - the tilt direction to test (front, back, left, right, or any).
      * @return {boolean} - true if the tilt sensor is tilted past a threshold in the specified direction.
      */
     whenTilted (args) {
@@ -430,7 +430,7 @@ class Scratch3ScratchBitBlocks {
     /**
      * Test whether the tilt sensor is currently tilted.
      * @param {object} args - the block's arguments.
-     * @property {TiltDirection} DIRECTION - the tilt direction to test (up, down, left, right, or any).
+     * @property {TiltDirection} DIRECTION - the tilt direction to test (front, back, left, right, or any).
      * @return {boolean} - true if the tilt sensor is tilted past a threshold in the specified direction.
      */
     isTilted (args) {
@@ -439,9 +439,9 @@ class Scratch3ScratchBitBlocks {
 
     /**
      * @param {object} args - the block's arguments.
-     * @property {TiltDirection} DIRECTION - the direction (up, down, left, right) to check.
+     * @property {TiltDirection} DIRECTION - the direction (front, back, left, right) to check.
      * @return {number} - the tilt sensor's angle in the specified direction.
-     * Note that getTiltAngle(up) = -getTiltAngle(down) and getTiltAngle(left) = -getTiltAngle(right).
+     * Note that getTiltAngle(front) = -getTiltAngle(back) and getTiltAngle(left) = -getTiltAngle(right).
      */
     getTiltAngle (args) {
         return this._getTiltAngle(args.DIRECTION);
@@ -449,7 +449,7 @@ class Scratch3ScratchBitBlocks {
 
     /**
      * Test whether the tilt sensor is currently tilted.
-     * @param {TiltDirection} direction - the tilt direction to test (up, down, left, right, or any).
+     * @param {TiltDirection} direction - the tilt direction to test (front, back, left, right, or any).
      * @return {boolean} - true if the tilt sensor is tilted past a threshold in the specified direction.
      * @private
      */
@@ -464,16 +464,16 @@ class Scratch3ScratchBitBlocks {
     }
 
     /**
-     * @param {TiltDirection} direction - the direction (up, down, left, right) to check.
+     * @param {TiltDirection} direction - the direction (front, back, left, right) to check.
      * @return {number} - the tilt sensor's angle in the specified direction.
-     * Note that getTiltAngle(up) = -getTiltAngle(down) and getTiltAngle(left) = -getTiltAngle(right).
+     * Note that getTiltAngle(front) = -getTiltAngle(back) and getTiltAngle(left) = -getTiltAngle(right).
      * @private
      */
     _getTiltAngle (direction) {
         switch (direction) {
-        case TiltDirection.UP:
+        case TiltDirection.FRONT:
             return this._device.tiltY;
-        case TiltDirection.DOWN:
+        case TiltDirection.BACK:
             return -this._device.tiltY;
         case TiltDirection.LEFT:
             return -this._device.tiltX;
