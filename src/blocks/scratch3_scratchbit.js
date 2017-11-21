@@ -98,12 +98,29 @@ class ScratchBit {
     _isGesture (g) {
         switch (g) {
             case Gesture.MOVE:
-                return Math.abs(this._sensors.aMagD) > 0.01 &&
-                    Math.abs(this._sensors.aMagD) < 0.3;
+                if (Math.abs(this._sensors.aMagD) < 0.13 || GestureTimeout.MOVE)
+                    return false;
+                GestureTimeout.MOVE = true;
+                setTimeout(function() {
+                    GestureTimeout.MOVE = false;
+                }, 250);
+                return true;
             case Gesture.SHAKE:
-                return Math.abs(this._sensors.aMagD) > 1;
+                if (Math.abs(this._sensors.aMagD) < 0.9 || GestureTimeout.SHAKE)
+                    return false;
+                GestureTimeout.SHAKE = true;
+                setTimeout(function() {
+                  GestureTimeout.SHAKE = false;
+                }, 300);
+                return true;
             case Gesture.JUMP:
-                return this._sensors.aMag < 0.2;
+                if (this._sensors.aMag > 0.2 || GestureTimeout.JUMP)
+                    return false;
+                GestureTimeout.JUMP = true;
+                setTimeout(function() {
+                  GestureTimeout.JUMP = false;
+                }, 500);
+                return true;
             default:
                 return false;
         }
@@ -229,6 +246,12 @@ const Gesture = {
     MOVE: 'move',
     SHAKE: 'shake',
     JUMP: 'jump'
+};
+
+const GestureTimeout = {
+    MOVE: false,
+    SHAKE: false,
+    JUMP: false
 };
 
 /**
