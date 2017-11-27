@@ -3094,10 +3094,10 @@ var _createClass = function () { function defineProperties(target, props) { for 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var adapter = __webpack_require__(80);
+var adapter = __webpack_require__(79);
 var mutationAdapter = __webpack_require__(40);
 var xmlEscape = __webpack_require__(96);
-var MonitorRecord = __webpack_require__(83);
+var MonitorRecord = __webpack_require__(82);
 var Clone = __webpack_require__(15);
 
 /**
@@ -3123,6 +3123,29 @@ var Blocks = function () {
          * @type {Array.<String>}
          */
         this._scripts = [];
+
+        /**
+         * Runtime Cache
+         * @type {{inputs: {}, procedureParamNames: {}, procedureDefinitions: {}}}
+         * @private
+         */
+        this._cache = {
+            /**
+             * Cache block inputs by block id
+             * @type {object.<string, !Array.<object>>}
+             */
+            inputs: {},
+            /**
+             * Cache procedure Param Names by block id
+             * @type {object.<string, ?Array.<string>>}
+             */
+            procedureParamNames: {},
+            /**
+             * Cache procedure definitions by block id
+             * @type {object.<string, ?string>}
+             */
+            procedureDefinitions: {}
+        };
     }
 
     /**
@@ -3220,20 +3243,27 @@ var Blocks = function () {
         /**
          * Get all non-branch inputs for a block.
          * @param {?object} block the block to query.
-         * @return {!object} All non-branch inputs and their associated blocks.
+         * @return {?Array.<object>} All non-branch inputs and their associated blocks.
          */
 
     }, {
         key: 'getInputs',
         value: function getInputs(block) {
             if (typeof block === 'undefined') return null;
-            var inputs = {};
+            var inputs = this._cache.inputs[block.id];
+            if (typeof inputs !== 'undefined') {
+                return inputs;
+            }
+
+            inputs = {};
             for (var input in block.inputs) {
                 // Ignore blocks prefixed with branch prefix.
                 if (input.substring(0, Blocks.BRANCH_INPUT_PREFIX.length) !== Blocks.BRANCH_INPUT_PREFIX) {
                     inputs[input] = block.inputs[input];
                 }
             }
+
+            this._cache.inputs[block.id] = inputs;
             return inputs;
         }
 
@@ -3275,16 +3305,24 @@ var Blocks = function () {
     }, {
         key: 'getProcedureDefinition',
         value: function getProcedureDefinition(name) {
+            var blockID = this._cache.procedureDefinitions[name];
+            if (typeof blockID !== 'undefined') {
+                return blockID;
+            }
+
             for (var id in this._blocks) {
                 if (!this._blocks.hasOwnProperty(id)) continue;
                 var block = this._blocks[id];
                 if (block.opcode === 'procedures_definition') {
                     var internal = this._getCustomBlockInternal(block);
                     if (internal && internal.mutation.proccode === name) {
-                        return id; // The outer define block id
+                        this._cache.procedureDefinitions[name] = id; // The outer define block id
+                        return id;
                     }
                 }
             }
+
+            this._cache.procedureDefinitions[name] = null;
             return null;
         }
 
@@ -3297,13 +3335,22 @@ var Blocks = function () {
     }, {
         key: 'getProcedureParamNames',
         value: function getProcedureParamNames(name) {
+            var cachedNames = this._cache.procedureParamNames[name];
+            if (typeof cachedNames !== 'undefined') {
+                return cachedNames;
+            }
+
             for (var id in this._blocks) {
                 if (!this._blocks.hasOwnProperty(id)) continue;
                 var block = this._blocks[id];
                 if (block.opcode === 'procedures_prototype' && block.mutation.proccode === name) {
-                    return JSON.parse(block.mutation.argumentnames);
+                    var paramNames = JSON.parse(block.mutation.argumentnames);
+                    this._cache.procedureParamNames[name] = paramNames;
+                    return paramNames;
                 }
             }
+
+            this._cache.procedureParamNames[name] = null;
             return null;
         }
     }, {
@@ -3404,6 +3451,18 @@ var Blocks = function () {
         // ---------------------------------------------------------------------
 
         /**
+         * Reset all runtime caches.
+         */
+
+    }, {
+        key: 'resetCache',
+        value: function resetCache() {
+            this._cache.inputs = {};
+            this._cache.procedureParamNames = {};
+            this._cache.procedureDefinitions = {};
+        }
+
+        /**
          * Block management: create blocks and scripts from a `create` event
          * @param {!object} block Blockly create event to be processed
          */
@@ -3424,6 +3483,8 @@ var Blocks = function () {
             if (block.topLevel) {
                 this._addScript(block.id);
             }
+
+            this.resetCache();
         }
 
         /**
@@ -3439,7 +3500,6 @@ var Blocks = function () {
             if (['field', 'mutation', 'checkbox'].indexOf(args.element) === -1) return;
             var block = this._blocks[args.id];
             if (typeof block === 'undefined') return;
-
             var wasMonitored = block.isMonitored;
             switch (args.element) {
                 case 'field':
@@ -3461,12 +3521,18 @@ var Blocks = function () {
                     break;
                 case 'checkbox':
                     block.isMonitored = args.value;
+                    if (optRuntime) {
+                        var isSpriteSpecific = optRuntime.monitorBlockInfo.hasOwnProperty(block.opcode) && optRuntime.monitorBlockInfo[block.opcode].isSpriteSpecific;
+                        block.targetId = isSpriteSpecific ? optRuntime.getEditingTarget().id : null;
+                    }
                     if (optRuntime && wasMonitored && !block.isMonitored) {
                         optRuntime.requestRemoveMonitor(block.id);
                     } else if (optRuntime && !wasMonitored && block.isMonitored) {
                         optRuntime.requestAddMonitor(MonitorRecord({
                             // @todo(vm#564) this will collide if multiple sprites use same block
                             id: block.id,
+                            targetId: block.targetId,
+                            spriteName: block.targetId ? optRuntime.getTargetById(block.targetId).getName() : null,
                             opcode: block.opcode,
                             params: this._getBlockParams(block),
                             // @todo(vm#565) for numerical values with decimals, some countries use comma
@@ -3475,6 +3541,8 @@ var Blocks = function () {
                     }
                     break;
             }
+
+            this.resetCache();
         }
 
         /**
@@ -3533,6 +3601,7 @@ var Blocks = function () {
                 }
                 this._blocks[e.id].parent = e.newParent;
             }
+            this.resetCache();
         }
 
         /**
@@ -3547,8 +3616,8 @@ var Blocks = function () {
 
             Object.keys(this._blocks).forEach(function (blockId) {
                 if (_this.getBlock(blockId).isMonitored) {
-                    // @todo handle specific targets (e.g. apple x position)
-                    runtime.addMonitorScript(blockId);
+                    var targetId = _this.getBlock(blockId).targetId;
+                    runtime.addMonitorScript(blockId, targetId ? runtime.getTargetById(targetId) : null);
                 }
             });
         }
@@ -3593,6 +3662,8 @@ var Blocks = function () {
 
             // Delete block itself.
             delete this._blocks[blockId];
+
+            this.resetCache();
         }
 
         // ---------------------------------------------------------------------
@@ -4896,7 +4967,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 var log = __webpack_require__(1);
 var MathUtil = __webpack_require__(8);
 var StringUtil = __webpack_require__(17);
-var Target = __webpack_require__(87);
+var Target = __webpack_require__(86);
 
 /**
  * Rendered target: instance of a sprite (clone), or the stage.
@@ -13208,7 +13279,7 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var SharedDispatch = __webpack_require__(79);
+var SharedDispatch = __webpack_require__(78);
 
 var log = __webpack_require__(1);
 
@@ -17787,6 +17858,16 @@ var Scratch3LooksBlocks = function () {
             };
         }
     }, {
+        key: 'getMonitored',
+        value: function getMonitored() {
+            return {
+                looks_size: { isSpriteSpecific: true },
+                looks_costumeorder: { isSpriteSpecific: true },
+                looks_backdroporder: {},
+                looks_backdropname: {}
+            };
+        }
+    }, {
         key: 'say',
         value: function say(args, util) {
             // @TODO in 2.0 calling say/think resets the right/left bias of the bubble
@@ -18074,6 +18155,15 @@ var Scratch3MotionBlocks = function () {
             };
         }
     }, {
+        key: 'getMonitored',
+        value: function getMonitored() {
+            return {
+                motion_xposition: { isSpriteSpecific: true },
+                motion_yposition: { isSpriteSpecific: true },
+                motion_direction: { isSpriteSpecific: true }
+            };
+        }
+    }, {
         key: 'moveSteps',
         value: function moveSteps(args, util) {
             var steps = Cast.toNumber(args.STEPS);
@@ -18316,474 +18406,6 @@ var _createClass = function () { function defineProperties(target, props) { for 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var ArgumentType = __webpack_require__(14);
-var BlockType = __webpack_require__(11);
-var Clone = __webpack_require__(15);
-var Cast = __webpack_require__(3);
-var MathUtil = __webpack_require__(8);
-var Timer = __webpack_require__(25);
-
-/**
- * An array of drum names, used in the play drum block.
- * @type {string[]}
- */
-var drumNames = ['Snare Drum', 'Bass Drum', 'Side Stick', 'Crash Cymbal', 'Open Hi-Hat', 'Closed Hi-Hat', 'Tambourine', 'Hand Clap', 'Claves', 'Wood Block', 'Cowbell', 'Triangle', 'Bongo', 'Conga', 'Cabasa', 'Guiro', 'Vibraslap', 'Open Cuica'];
-
-/**
- * An array of instrument names, used in the set instrument block.
- * @type {string[]}
- */
-var instrumentNames = ['Piano', 'Electric Piano', 'Organ', 'Guitar', 'Electric Guitar', 'Bass', 'Pizzicato', 'Cello', 'Trombone', 'Clarinet', 'Saxophone', 'Flute', 'Wooden Flute', 'Bassoon', 'Choir', 'Vibraphone', 'Music Box', 'Steel Drum', 'Marimba', 'Synth Lead', 'Synth Pad'];
-
-/**
- * Class for the music-related blocks in Scratch 3.0
- * @param {Runtime} runtime - the runtime instantiating this block package.
- * @constructor
- */
-
-var Scratch3MusicBlocks = function () {
-    function Scratch3MusicBlocks(runtime) {
-        _classCallCheck(this, Scratch3MusicBlocks);
-
-        /**
-         * The runtime instantiating this block package.
-         * @type {Runtime}
-         */
-        this.runtime = runtime;
-
-        /**
-         * The current tempo in beats per minute. The tempo is a global property of the project,
-         * not a property of each sprite, so it is not stored in the MusicState object.
-         * @type {number}
-         */
-        this.tempo = 60;
-
-        this.drumMenu = this._buildMenu(drumNames);
-        this.instrumentMenu = this._buildMenu(instrumentNames);
-    }
-
-    /**
-     * Build a menu using an array of strings.
-     * Used for creating the drum and instrument menus.
-     * @param  {string[]} names - An array of names.
-     * @return {array} - An array of objects with text and value properties, for constructing a block menu.
-     * @private
-     */
-
-
-    _createClass(Scratch3MusicBlocks, [{
-        key: '_buildMenu',
-        value: function _buildMenu(names) {
-            var menu = [];
-            for (var i = 0; i < names.length; i++) {
-                var entry = {};
-                var num = i + 1; // Menu numbers are one-indexed
-                entry.text = '(' + num + ') ' + names[i];
-                entry.value = String(num);
-                menu.push(entry);
-            }
-            return menu;
-        }
-
-        /**
-         * The key to load & store a target's music-related state.
-         * @type {string}
-         */
-
-    }, {
-        key: '_getMusicState',
-
-
-        /**
-         * @param {Target} target - collect music state for this target.
-         * @returns {MusicState} the mutable music state associated with that target. This will be created if necessary.
-         * @private
-         */
-        value: function _getMusicState(target) {
-            var musicState = target.getCustomState(Scratch3MusicBlocks.STATE_KEY);
-            if (!musicState) {
-                musicState = Clone.simple(Scratch3MusicBlocks.DEFAULT_MUSIC_STATE);
-                target.setCustomState(Scratch3MusicBlocks.STATE_KEY, musicState);
-            }
-            return musicState;
-        }
-
-        /**
-         * @returns {object} metadata for this extension and its blocks.
-         */
-
-    }, {
-        key: 'getInfo',
-        value: function getInfo() {
-            return {
-                id: 'music',
-                name: 'Music',
-                blocks: [{
-                    opcode: 'playDrumForBeats',
-                    blockType: BlockType.COMMAND,
-                    text: 'play drum [DRUM] for [BEATS] beats',
-                    arguments: {
-                        DRUM: {
-                            type: ArgumentType.NUMBER,
-                            menu: 'drums',
-                            defaultValue: 1
-                        },
-                        BEATS: {
-                            type: ArgumentType.NUMBER,
-                            defaultValue: 0.25
-                        }
-                    }
-                }, {
-                    opcode: 'restForBeats',
-                    blockType: BlockType.COMMAND,
-                    text: 'rest for [BEATS] beats',
-                    arguments: {
-                        BEATS: {
-                            type: ArgumentType.NUMBER,
-                            defaultValue: 0.25
-                        }
-                    }
-                }, {
-                    opcode: 'playNoteForBeats',
-                    blockType: BlockType.COMMAND,
-                    text: 'play note [NOTE] for [BEATS] beats',
-                    arguments: {
-                        NOTE: {
-                            type: ArgumentType.NUMBER,
-                            defaultValue: 60
-                        },
-                        BEATS: {
-                            type: ArgumentType.NUMBER,
-                            defaultValue: 0.25
-                        }
-                    }
-                }, {
-                    opcode: 'setInstrument',
-                    blockType: BlockType.COMMAND,
-                    text: 'set instrument to [INSTRUMENT]',
-                    arguments: {
-                        INSTRUMENT: {
-                            type: ArgumentType.NUMBER,
-                            menu: 'instruments',
-                            defaultValue: 1
-                        }
-                    }
-                }, {
-                    opcode: 'setTempo',
-                    blockType: BlockType.COMMAND,
-                    text: 'set tempo to [TEMPO]',
-                    arguments: {
-                        TEMPO: {
-                            type: ArgumentType.NUMBER,
-                            defaultValue: 60
-                        }
-                    }
-                }, {
-                    opcode: 'changeTempo',
-                    blockType: BlockType.COMMAND,
-                    text: 'change tempo by [TEMPO]',
-                    arguments: {
-                        TEMPO: {
-                            type: ArgumentType.NUMBER,
-                            defaultValue: 20
-                        }
-                    }
-                }, {
-                    opcode: 'getTempo',
-                    text: 'tempo',
-                    blockType: BlockType.REPORTER
-                }],
-                menus: {
-                    drums: this.drumMenu,
-                    instruments: this.instrumentMenu
-                }
-            };
-        }
-
-        /**
-         * Play a drum sound for some number of beats.
-         * @param {object} args - the block arguments.
-         * @param {object} util - utility object provided by the runtime.
-         * @property {int} DRUM - the number of the drum to play.
-         * @property {number} BEATS - the duration in beats of the drum sound.
-         */
-
-    }, {
-        key: 'playDrumForBeats',
-        value: function playDrumForBeats(args, util) {
-            if (this._stackTimerNeedsInit(util)) {
-                var drum = Cast.toNumber(args.DRUM);
-                drum -= 1; // drums are one-indexed
-                if (typeof this.runtime.audioEngine === 'undefined') return;
-                drum = MathUtil.wrapClamp(drum, 0, this.runtime.audioEngine.numDrums - 1);
-                var beats = Cast.toNumber(args.BEATS);
-                beats = this._clampBeats(beats);
-                if (util.target.audioPlayer !== null) {
-                    util.target.audioPlayer.playDrumForBeats(drum, beats);
-                }
-                this._startStackTimer(util, this._beatsToSec(beats));
-            } else {
-                this._checkStackTimer(util);
-            }
-        }
-
-        /**
-         * Rest for some number of beats.
-         * @param {object} args - the block arguments.
-         * @param {object} util - utility object provided by the runtime.
-         * @property {number} BEATS - the duration in beats of the rest.
-         */
-
-    }, {
-        key: 'restForBeats',
-        value: function restForBeats(args, util) {
-            if (this._stackTimerNeedsInit(util)) {
-                var beats = Cast.toNumber(args.BEATS);
-                beats = this._clampBeats(beats);
-                this._startStackTimer(util, this._beatsToSec(beats));
-            } else {
-                this._checkStackTimer(util);
-            }
-        }
-
-        /**
-         * Play a note using the current musical instrument for some number of beats.
-         * @param {object} args - the block arguments.
-         * @param {object} util - utility object provided by the runtime.
-         * @property {number} NOTE - the pitch of the note to play, interpreted as a MIDI note number.
-         * @property {number} BEATS - the duration in beats of the note.
-         */
-
-    }, {
-        key: 'playNoteForBeats',
-        value: function playNoteForBeats(args, util) {
-            if (this._stackTimerNeedsInit(util)) {
-                var note = Cast.toNumber(args.NOTE);
-                note = MathUtil.clamp(note, Scratch3MusicBlocks.MIDI_NOTE_RANGE.min, Scratch3MusicBlocks.MIDI_NOTE_RANGE.max);
-                var beats = Cast.toNumber(args.BEATS);
-                beats = this._clampBeats(beats);
-                var musicState = this._getMusicState(util.target);
-                var inst = musicState.currentInstrument;
-                if (typeof this.runtime.audioEngine !== 'undefined') {
-                    this.runtime.audioEngine.playNoteForBeatsWithInstAndVol(note, beats, inst, 100);
-                }
-                this._startStackTimer(util, this._beatsToSec(beats));
-            } else {
-                this._checkStackTimer(util);
-            }
-        }
-
-        /**
-         * Clamp a duration in beats to the allowed min and max duration.
-         * @param  {number} beats - a duration in beats.
-         * @return {number} - the clamped duration.
-         * @private
-         */
-
-    }, {
-        key: '_clampBeats',
-        value: function _clampBeats(beats) {
-            return MathUtil.clamp(beats, Scratch3MusicBlocks.BEAT_RANGE.min, Scratch3MusicBlocks.BEAT_RANGE.max);
-        }
-
-        /**
-         * Convert a number of beats to a number of seconds, using the current tempo.
-         * @param  {number} beats - number of beats to convert to secs.
-         * @return {number} seconds - number of seconds `beats` will last.
-         * @private
-         */
-
-    }, {
-        key: '_beatsToSec',
-        value: function _beatsToSec(beats) {
-            return 60 / this.tempo * beats;
-        }
-
-        /**
-         * Check if the stack timer needs initialization.
-         * @param {object} util - utility object provided by the runtime.
-         * @return {boolean} - true if the stack timer needs to be initialized.
-         * @private
-         */
-
-    }, {
-        key: '_stackTimerNeedsInit',
-        value: function _stackTimerNeedsInit(util) {
-            return !util.stackFrame.timer;
-        }
-
-        /**
-         * Start the stack timer and the yield the thread if necessary.
-         * @param {object} util - utility object provided by the runtime.
-         * @param {number} duration - a duration in seconds to set the timer for.
-         * @private
-         */
-
-    }, {
-        key: '_startStackTimer',
-        value: function _startStackTimer(util, duration) {
-            util.stackFrame.timer = new Timer();
-            util.stackFrame.timer.start();
-            util.stackFrame.duration = duration;
-            if (util.stackFrame.duration > 0) {
-                util.yield();
-            }
-        }
-
-        /**
-         * Check the stack timer, and if its time is not up yet, yield the thread.
-         * @param {object} util - utility object provided by the runtime.
-         * @private
-         */
-
-    }, {
-        key: '_checkStackTimer',
-        value: function _checkStackTimer(util) {
-            var timeElapsed = util.stackFrame.timer.timeElapsed();
-            if (timeElapsed < util.stackFrame.duration * 1000) {
-                util.yield();
-            }
-        }
-
-        /**
-         * Select an instrument for playing notes.
-         * @param {object} args - the block arguments.
-         * @param {object} util - utility object provided by the runtime.
-         * @property {int} INSTRUMENT - the number of the instrument to select.
-         * @return {Promise} - a promise which will resolve once the instrument has loaded.
-         */
-
-    }, {
-        key: 'setInstrument',
-        value: function setInstrument(args, util) {
-            var musicState = this._getMusicState(util.target);
-            var instNum = Cast.toNumber(args.INSTRUMENT);
-            instNum -= 1; // instruments are one-indexed
-            if (typeof this.runtime.audioEngine === 'undefined') return;
-            instNum = MathUtil.wrapClamp(instNum, 0, this.runtime.audioEngine.numInstruments - 1);
-            musicState.currentInstrument = instNum;
-            return this.runtime.audioEngine.instrumentPlayer.loadInstrument(musicState.currentInstrument);
-        }
-
-        /**
-         * Set the current tempo to a new value.
-         * @param {object} args - the block arguments.
-         * @property {number} TEMPO - the tempo, in beats per minute.
-         */
-
-    }, {
-        key: 'setTempo',
-        value: function setTempo(args) {
-            var tempo = Cast.toNumber(args.TEMPO);
-            this._updateTempo(tempo);
-        }
-
-        /**
-         * Change the current tempo by some amount.
-         * @param {object} args - the block arguments.
-         * @property {number} TEMPO - the amount to change the tempo, in beats per minute.
-         */
-
-    }, {
-        key: 'changeTempo',
-        value: function changeTempo(args) {
-            var change = Cast.toNumber(args.TEMPO);
-            var tempo = change + this.tempo;
-            this._updateTempo(tempo);
-        }
-
-        /**
-         * Update the current tempo, clamping it to the min and max allowable range.
-         * @param {number} tempo - the tempo to set, in beats per minute.
-         * @private
-         */
-
-    }, {
-        key: '_updateTempo',
-        value: function _updateTempo(tempo) {
-            tempo = MathUtil.clamp(tempo, Scratch3MusicBlocks.TEMPO_RANGE.min, Scratch3MusicBlocks.TEMPO_RANGE.max);
-            this.tempo = tempo;
-        }
-
-        /**
-         * Get the current tempo.
-         * @return {number} - the current tempo, in beats per minute.
-         */
-
-    }, {
-        key: 'getTempo',
-        value: function getTempo() {
-            return this.tempo;
-        }
-    }], [{
-        key: 'STATE_KEY',
-        get: function get() {
-            return 'Scratch.music';
-        }
-
-        /**
-         * The default music-related state, to be used when a target has no existing music state.
-         * @type {MusicState}
-         */
-
-    }, {
-        key: 'DEFAULT_MUSIC_STATE',
-        get: function get() {
-            return {
-                currentInstrument: 0
-            };
-        }
-
-        /**
-         * The minimum and maximum MIDI note numbers, for clamping the input to play note.
-         * @type {{min: number, max: number}}
-         */
-
-    }, {
-        key: 'MIDI_NOTE_RANGE',
-        get: function get() {
-            return { min: 36, max: 96 }; // C2 to C7
-        }
-
-        /**
-         * The minimum and maximum beat values, for clamping the duration of play note, play drum and rest.
-         * 100 beats at the default tempo of 60bpm is 100 seconds.
-         * @type {{min: number, max: number}}
-         */
-
-    }, {
-        key: 'BEAT_RANGE',
-        get: function get() {
-            return { min: 0, max: 100 };
-        }
-
-        /** The minimum and maximum tempo values, in bpm.
-         * @type {{min: number, max: number}}
-         */
-
-    }, {
-        key: 'TEMPO_RANGE',
-        get: function get() {
-            return { min: 20, max: 500 };
-        }
-    }]);
-
-    return Scratch3MusicBlocks;
-}();
-
-module.exports = Scratch3MusicBlocks;
-
-/***/ }),
-/* 72 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
 var Cast = __webpack_require__(3);
 var MathUtil = __webpack_require__(8);
 
@@ -18981,7 +18603,7 @@ var Scratch3OperatorsBlocks = function () {
 module.exports = Scratch3OperatorsBlocks;
 
 /***/ }),
-/* 73 */
+/* 72 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -19715,7 +19337,7 @@ var Scratch3PenBlocks = function () {
 module.exports = Scratch3PenBlocks;
 
 /***/ }),
-/* 74 */
+/* 73 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -19795,7 +19417,7 @@ var Scratch3ProcedureBlocks = function () {
 module.exports = Scratch3ProcedureBlocks;
 
 /***/ }),
-/* 75 */
+/* 74 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -19876,6 +19498,22 @@ var ScratchBit = function () {
             brightness: 10
         };
 
+        this._gestures = {
+            'moving': false,
+            'move': {
+                active: false,
+                timeout: false
+            },
+            'shake': {
+                active: false,
+                timeout: false
+            },
+            'jump': {
+                active: false,
+                timeout: false
+            }
+        };
+
         this._onRxChar = this._onRxChar.bind(this);
         this._onDisconnect = this._onDisconnect.bind(this);
 
@@ -19898,33 +19536,23 @@ var ScratchBit = function () {
          */
 
     }, {
+        key: '_setGestureTimeout',
+        value: function _setGestureTimeout(g, t) {
+            var gesture = this._gestures[g];
+            if (gesture.timeout) return;
+            gesture.active = true;
+            gesture.timeout = true;
+            setTimeout(function () {
+                gesture.active = false;
+            }, t / 2);
+            setTimeout(function () {
+                gesture.timeout = false;
+            }, t);
+        }
+    }, {
         key: '_isGesture',
         value: function _isGesture(g) {
-            switch (g) {
-                case Gesture.MOVE:
-                    if (Math.abs(this._sensors.aMagD) < 0.13 || GestureTimeout.MOVE) return false;
-                    GestureTimeout.MOVE = true;
-                    setTimeout(function () {
-                        GestureTimeout.MOVE = false;
-                    }, 250);
-                    return true;
-                case Gesture.SHAKE:
-                    if (Math.abs(this._sensors.aMagD) < 0.9 || GestureTimeout.SHAKE) return false;
-                    GestureTimeout.SHAKE = true;
-                    setTimeout(function () {
-                        GestureTimeout.SHAKE = false;
-                    }, 300);
-                    return true;
-                case Gesture.JUMP:
-                    if (this._sensors.aMag > 0.2 || GestureTimeout.JUMP) return false;
-                    GestureTimeout.JUMP = true;
-                    setTimeout(function () {
-                        GestureTimeout.JUMP = false;
-                    }, 500);
-                    return true;
-                default:
-                    return false;
-            }
+            return this._gestures[g].active;
         }
 
         /**
@@ -19995,6 +19623,17 @@ var ScratchBit = function () {
             tmp = tmp / 10000000;
             this._sensors.gMagD = this._sensors.gMag - tmp;
             this._sensors.gMag = tmp;
+
+            if (Math.abs(this._sensors.aMagD) > 0.1) {
+                this._gestures[Gesture.MOVING] = true;
+                this._setGestureTimeout(Gesture.MOVE, 250);
+            } else if (Math.abs(this._sensors.aMagD) < 0.006) {
+                this._gestures[Gesture.MOVING] = false;
+            }
+
+            if (Math.abs(this._sensors.aMagD) > 0.9) this._setGestureTimeout(Gesture.SHAKE, 300);
+
+            if (this._gestures[Gesture.JUMP].active && this._sensors.aMag > 0.5) this._gestures[Gesture.JUMP].active = false;else if (this._sensors.aMag < 0.2) this._gestures[Gesture.JUMP].active = true;
         }
 
         /**
@@ -20089,14 +19728,9 @@ var TiltDirection = {
 
 var Gesture = {
     MOVE: 'move',
+    MOVING: 'moving',
     SHAKE: 'shake',
     JUMP: 'jump'
-};
-
-var GestureTimeout = {
-    MOVE: false,
-    SHAKE: false,
-    JUMP: false
 };
 
 /**
@@ -20189,9 +19823,20 @@ var Scratch3ScratchBitBlocks = function () {
                     text: 'when jumped',
                     blockType: BlockType.HAT
                 }, {
+                    opcode: 'isMoving',
+                    text: 'moving?',
+                    blockType: BlockType.BOOLEAN
+                }, {
                     opcode: 'whenDark',
-                    text: 'when dark',
-                    blockType: BlockType.HAT
+                    text: 'when [LIGHT]',
+                    blockType: BlockType.HAT,
+                    arguments: {
+                        LIGHT: {
+                            type: ArgumentType.STRING,
+                            menu: 'lightLevel',
+                            defaultValue: 'dark'
+                        }
+                    }
                 }, {
                     opcode: 'getBrightness',
                     text: 'brightness',
@@ -20231,6 +19876,7 @@ var Scratch3ScratchBitBlocks = function () {
                     }
                 }],
                 menus: {
+                    lightLevel: ['dark', 'light'],
                     tiltDirection: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT],
                     tiltDirectionAny: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
                 }
@@ -20283,6 +19929,11 @@ var Scratch3ScratchBitBlocks = function () {
         value: function whenJumped() {
             return this._device._isGesture(Gesture.JUMP);
         }
+    }, {
+        key: 'isMoving',
+        value: function isMoving() {
+            return this._device._gestures['moving'];
+        }
 
         /**
          * Compare the distance sensor's value to a reference.
@@ -20294,8 +19945,8 @@ var Scratch3ScratchBitBlocks = function () {
 
     }, {
         key: 'whenDark',
-        value: function whenDark() {
-            return this._device.brightness < Scratch3ScratchBitBlocks.DARK_THRESHOLD;
+        value: function whenDark(args) {
+            if (args.LIGHT === 'dark') return this._device.brightness < Scratch3ScratchBitBlocks.DARK_THRESHOLD;else return this._device.brightness > Scratch3ScratchBitBlocks.DARK_THRESHOLD;
         }
 
         /**
@@ -20396,7 +20047,7 @@ var Scratch3ScratchBitBlocks = function () {
 module.exports = Scratch3ScratchBitBlocks;
 
 /***/ }),
-/* 76 */
+/* 75 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -20462,6 +20113,17 @@ var Scratch3SensingBlocks = function () {
                 sensing_loudness: this.getLoudness,
                 sensing_askandwait: this.askAndWait,
                 sensing_answer: this.getAnswer
+            };
+        }
+    }, {
+        key: 'getMonitored',
+        value: function getMonitored() {
+            return {
+                sensing_answer: {},
+                sensing_loudness: {},
+                sensing_timer: {},
+                sensing_of: {},
+                sensing_current: {}
             };
         }
     }, {
@@ -20716,7 +20378,7 @@ var Scratch3SensingBlocks = function () {
 module.exports = Scratch3SensingBlocks;
 
 /***/ }),
-/* 77 */
+/* 76 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -20786,6 +20448,13 @@ var Scratch3SoundBlocks = function () {
                 sound_setvolumeto: this.setVolume,
                 sound_changevolumeby: this.changeVolume,
                 sound_volume: this.getVolume
+            };
+        }
+    }, {
+        key: 'getMonitored',
+        value: function getMonitored() {
+            return {
+                sound_volume: {}
             };
         }
     }, {
@@ -21012,7 +20681,7 @@ var Scratch3SoundBlocks = function () {
 module.exports = Scratch3SoundBlocks;
 
 /***/ }),
-/* 78 */
+/* 77 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22075,7 +21744,7 @@ var Scratch3WeDo2Blocks = function () {
 module.exports = Scratch3WeDo2Blocks;
 
 /***/ }),
-/* 79 */
+/* 78 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22386,7 +22055,7 @@ var SharedDispatch = function () {
 module.exports = SharedDispatch;
 
 /***/ }),
-/* 80 */
+/* 79 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22562,7 +22231,7 @@ var adapter = function adapter(e) {
 module.exports = adapter;
 
 /***/ }),
-/* 81 */
+/* 80 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22774,7 +22443,7 @@ var BlockUtility = function () {
 module.exports = BlockUtility;
 
 /***/ }),
-/* 82 */
+/* 81 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22782,7 +22451,7 @@ module.exports = BlockUtility;
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
-var BlockUtility = __webpack_require__(81);
+var BlockUtility = __webpack_require__(80);
 var log = __webpack_require__(1);
 var Thread = __webpack_require__(20);
 
@@ -22860,8 +22529,14 @@ var handleReport = function handleReport(resolvedValue, sequencer, thread, curre
                 sequencer.runtime.visualReport(currentBlockId, resolvedValue);
             }
             if (thread.updateMonitor) {
+                var targetId = sequencer.runtime.monitorBlocks.getBlock(currentBlockId).targetId;
+                if (targetId && !sequencer.runtime.getTargetById(targetId)) {
+                    // Target no longer exists
+                    return;
+                }
                 sequencer.runtime.requestUpdateMonitor(Map({
                     id: currentBlockId,
+                    spriteName: targetId ? sequencer.runtime.getTargetById(targetId).getName() : null,
                     value: String(resolvedValue)
                 }));
             }
@@ -23069,7 +22744,7 @@ var execute = function execute(sequencer, thread) {
 module.exports = execute;
 
 /***/ }),
-/* 83 */
+/* 82 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -23080,6 +22755,10 @@ var _require = __webpack_require__(26),
 
 var MonitorRecord = Record({
     id: null,
+    /** Present only if the monitor is sprite-specific, such as x position */
+    spriteName: null,
+    /** Present only if the monitor is sprite-specific, such as x position */
+    targetId: null,
     opcode: null,
     value: null,
     params: null
@@ -23088,7 +22767,7 @@ var MonitorRecord = Record({
 module.exports = MonitorRecord;
 
 /***/ }),
-/* 84 */
+/* 83 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -23445,7 +23124,7 @@ Profiler.STOP = STOP;
 module.exports = Profiler;
 
 /***/ }),
-/* 85 */
+/* 84 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -23473,9 +23152,9 @@ var escapeHtml = __webpack_require__(118);
 var ArgumentType = __webpack_require__(14);
 var Blocks = __webpack_require__(13);
 var BlockType = __webpack_require__(11);
-var Sequencer = __webpack_require__(86);
+var Sequencer = __webpack_require__(85);
 var Thread = __webpack_require__(20);
-var Profiler = __webpack_require__(84);
+var Profiler = __webpack_require__(83);
 
 // Virtual I/O devices.
 var Clock = __webpack_require__(89);
@@ -23488,11 +23167,11 @@ var defaultBlockPackages = {
     scratch3_event: __webpack_require__(68),
     scratch3_looks: __webpack_require__(69),
     scratch3_motion: __webpack_require__(70),
-    scratch3_operators: __webpack_require__(72),
-    scratch3_sound: __webpack_require__(77),
-    scratch3_sensing: __webpack_require__(76),
+    scratch3_operators: __webpack_require__(71),
+    scratch3_sound: __webpack_require__(76),
+    scratch3_sensing: __webpack_require__(75),
     scratch3_data: __webpack_require__(67),
-    scratch3_procedures: __webpack_require__(74)
+    scratch3_procedures: __webpack_require__(73)
 };
 
 /**
@@ -23669,6 +23348,13 @@ var Runtime = function (_EventEmitter) {
         _this._refreshTargets = false;
 
         /**
+         * Map to look up all monitor block information by opcode.
+         * @type {object}
+         * @private
+         */
+        _this.monitorBlockInfo = {};
+
+        /**
          * Ordered map of all monitors, which are MonitorReporter objects.
          */
         _this._monitorState = OrderedMap({});
@@ -23776,6 +23462,10 @@ var Runtime = function (_EventEmitter) {
                                 this._hats[hatName] = packageHats[hatName];
                             }
                         }
+                    }
+                    // Collect monitored from package.
+                    if (packageObject.getMonitored) {
+                        this.monitorBlockInfo = Object.assign({}, this.monitorBlockInfo, packageObject.getMonitored());
                     }
                 }
             }
@@ -24324,7 +24014,7 @@ var Runtime = function (_EventEmitter) {
         /**
          * Enqueue a script that when finished will update the monitor for the block.
          * @param {!string} topBlockId ID of block that starts the script.
-         * @param {?string} optTarget target ID for target to run script on. If not supplied, uses editing target.
+         * @param {?Target} optTarget target Target to run script on. If not supplied, uses editing target.
          */
 
     }, {
@@ -24824,7 +24514,7 @@ var Runtime = function (_EventEmitter) {
     }, {
         key: 'requestAddMonitor',
         value: function requestAddMonitor(monitor) {
-            this._monitorState = this._monitorState.set(monitor.id, monitor);
+            this._monitorState = this._monitorState.set(monitor.get('id'), monitor);
         }
 
         /**
@@ -24838,8 +24528,9 @@ var Runtime = function (_EventEmitter) {
     }, {
         key: 'requestUpdateMonitor',
         value: function requestUpdateMonitor(monitor) {
-            if (this._monitorState.has(monitor.get('id'))) {
-                this._monitorState = this._monitorState.set(monitor.get('id'), this._monitorState.get(monitor.get('id')).merge(monitor));
+            var id = monitor.get('id');
+            if (this._monitorState.has(id)) {
+                this._monitorState = this._monitorState.set(id, this._monitorState.get(id).merge(monitor));
             }
         }
 
@@ -24853,6 +24544,20 @@ var Runtime = function (_EventEmitter) {
         key: 'requestRemoveMonitor',
         value: function requestRemoveMonitor(monitorId) {
             this._monitorState = this._monitorState.delete(monitorId);
+        }
+
+        /**
+         * Removes all monitors with the given target ID from the state. Does nothing if
+         * the monitor already does not exist in the state.
+         * @param {!string} targetId Remove all monitors with given target ID.
+         */
+
+    }, {
+        key: 'requestRemoveMonitorByTargetId',
+        value: function requestRemoveMonitorByTargetId(targetId) {
+            this._monitorState = this._monitorState.filterNot(function (value) {
+                return value.targetId === targetId;
+            });
         }
 
         /**
@@ -25231,7 +24936,7 @@ var Runtime = function (_EventEmitter) {
 module.exports = Runtime;
 
 /***/ }),
-/* 86 */
+/* 85 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -25243,7 +24948,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 var Timer = __webpack_require__(25);
 var Thread = __webpack_require__(20);
-var execute = __webpack_require__(82);
+var execute = __webpack_require__(81);
 
 /**
  * Profiler frame name for stepping a single thread.
@@ -25595,7 +25300,7 @@ var Sequencer = function () {
 module.exports = Sequencer;
 
 /***/ }),
-/* 87 */
+/* 86 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -25879,7 +25584,7 @@ var Target = function (_EventEmitter) {
 module.exports = Target;
 
 /***/ }),
-/* 88 */
+/* 87 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -25897,10 +25602,10 @@ var BlockType = __webpack_require__(11);
 // These extensions are currently built into the VM repository but should not be loaded at startup.
 // TODO: move these out into a separate repository?
 // TODO: change extension spec so that library info, including extension ID, can be collected through static methods
-var Scratch3PenBlocks = __webpack_require__(73);
-var Scratch3WeDo2Blocks = __webpack_require__(78);
-var Scratch3MusicBlocks = __webpack_require__(71);
-var Scratch3ScratchBitBlocks = __webpack_require__(75);
+var Scratch3PenBlocks = __webpack_require__(72);
+var Scratch3WeDo2Blocks = __webpack_require__(77);
+var Scratch3ScratchBitBlocks = __webpack_require__(74);
+var Scratch3MusicBlocks = __webpack_require__(88);
 var builtinExtensions = {
     pen: Scratch3PenBlocks,
     wedo2: Scratch3WeDo2Blocks,
@@ -26194,6 +25899,851 @@ var ExtensionManager = function () {
 }();
 
 module.exports = ExtensionManager;
+
+/***/ }),
+/* 88 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var ArgumentType = __webpack_require__(14);
+var BlockType = __webpack_require__(11);
+var Clone = __webpack_require__(15);
+var Cast = __webpack_require__(3);
+var MathUtil = __webpack_require__(8);
+var Timer = __webpack_require__(25);
+
+/**
+ * Class for the music-related blocks in Scratch 3.0
+ * @param {Runtime} runtime - the runtime instantiating this block package.
+ * @constructor
+ */
+
+var Scratch3MusicBlocks = function () {
+    function Scratch3MusicBlocks(runtime) {
+        _classCallCheck(this, Scratch3MusicBlocks);
+
+        /**
+         * The runtime instantiating this block package.
+         * @type {Runtime}
+         */
+        this.runtime = runtime;
+
+        /**
+         * The current tempo in beats per minute. The tempo is a global property of the project,
+         * not a property of each sprite, so it is not stored in the MusicState object.
+         * @type {number}
+         */
+        this.tempo = 60;
+
+        /**
+         * The number of drum and instrument sounds currently being played simultaneously.
+         * @type {number}
+         * @private
+         */
+        this._concurrencyCounter = 0;
+
+        /**
+         * An array of audio buffers, one for each drum sound.
+         * @type {Array}
+         * @private
+         */
+        this._drumBuffers = [];
+
+        /**
+         * An array of arrays of audio buffers. Each instrument has one or more audio buffers.
+         * @type {Array[]}
+         * @private
+         */
+        this._instrumentBufferArrays = [];
+
+        this._loadAllSounds();
+    }
+
+    /**
+     * Download and decode the full set of drum and instrument sounds, and
+     * store the audio buffers in arrays.
+     */
+
+
+    _createClass(Scratch3MusicBlocks, [{
+        key: '_loadAllSounds',
+        value: function _loadAllSounds() {
+            var _this = this;
+
+            var loadingPromises = [];
+            this.DRUM_INFO.forEach(function (drumInfo, index) {
+                var fileName = 'drums/' + drumInfo.fileName;
+                var promise = _this._loadSound(fileName, index, _this._drumBuffers);
+                loadingPromises.push(promise);
+            });
+            this.INSTRUMENT_INFO.forEach(function (instrumentInfo, instrumentIndex) {
+                _this._instrumentBufferArrays[instrumentIndex] = [];
+                instrumentInfo.samples.forEach(function (sample, noteIndex) {
+                    var fileName = 'instruments/' + instrumentInfo.dirName + '/' + sample;
+                    var promise = _this._loadSound(fileName, noteIndex, _this._instrumentBufferArrays[instrumentIndex]);
+                    loadingPromises.push(promise);
+                });
+            });
+            Promise.all(loadingPromises).then(function () {
+                // @TODO: Update the extension status indicator.
+            });
+        }
+
+        /**
+         * Download and decode a sound, and store the buffer in an array.
+         * @param {string} fileName - the audio file name.
+         * @param {number} index - the index at which to store the audio buffer.
+         * @param {array} bufferArray - the array of buffers in which to store it.
+         * @return {Promise} - a promise which will resolve once the sound has loaded.
+         */
+
+    }, {
+        key: '_loadSound',
+        value: function _loadSound(fileName, index, bufferArray) {
+            var _this2 = this;
+
+            if (!this.runtime.storage) return;
+            if (!this.runtime.audioEngine) return;
+            return this.runtime.storage.load(this.runtime.storage.AssetType.Sound, fileName, 'mp3').then(function (soundAsset) {
+                return _this2.runtime.audioEngine.audioContext.decodeAudioData(soundAsset.data.buffer);
+            }).then(function (buffer) {
+                bufferArray[index] = buffer;
+            });
+        }
+
+        /**
+         * Create data for a menu in scratch-blocks format, consisting of an array of objects with text and
+         * value properties. The text is a translated string, and the value is one-indexed.
+         * @param  {object[]} info - An array of info objects each having a name property.
+         * @return {array} - An array of objects with text and value properties.
+         * @private
+         */
+
+    }, {
+        key: '_buildMenu',
+        value: function _buildMenu(info) {
+            return info.map(function (entry, index) {
+                var obj = {};
+                obj.text = entry.name;
+                obj.value = index + 1;
+                return obj;
+            });
+        }
+
+        /**
+         * An array of info about each drum.
+         * @type {object[]} an array of objects.
+         * @param {string} name - the translatable name to display in the drums menu.
+         * @param {string} fileName - the name of the audio file containing the drum sound.
+         */
+
+    }, {
+        key: '_getMusicState',
+
+
+        /**
+         * @param {Target} target - collect music state for this target.
+         * @returns {MusicState} the mutable music state associated with that target. This will be created if necessary.
+         * @private
+         */
+        value: function _getMusicState(target) {
+            var musicState = target.getCustomState(Scratch3MusicBlocks.STATE_KEY);
+            if (!musicState) {
+                musicState = Clone.simple(Scratch3MusicBlocks.DEFAULT_MUSIC_STATE);
+                target.setCustomState(Scratch3MusicBlocks.STATE_KEY, musicState);
+            }
+            return musicState;
+        }
+
+        /**
+         * @returns {object} metadata for this extension and its blocks.
+         */
+
+    }, {
+        key: 'getInfo',
+        value: function getInfo() {
+            return {
+                id: 'music',
+                name: 'Music',
+                blocks: [{
+                    opcode: 'playDrumForBeats',
+                    blockType: BlockType.COMMAND,
+                    text: 'play drum [DRUM] for [BEATS] beats',
+                    arguments: {
+                        DRUM: {
+                            type: ArgumentType.NUMBER,
+                            menu: 'drums',
+                            defaultValue: 1
+                        },
+                        BEATS: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 0.25
+                        }
+                    }
+                }, {
+                    opcode: 'restForBeats',
+                    blockType: BlockType.COMMAND,
+                    text: 'rest for [BEATS] beats',
+                    arguments: {
+                        BEATS: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 0.25
+                        }
+                    }
+                }, {
+                    opcode: 'playNoteForBeats',
+                    blockType: BlockType.COMMAND,
+                    text: 'play note [NOTE] for [BEATS] beats',
+                    arguments: {
+                        NOTE: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 60
+                        },
+                        BEATS: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 0.25
+                        }
+                    }
+                }, {
+                    opcode: 'setInstrument',
+                    blockType: BlockType.COMMAND,
+                    text: 'set instrument to [INSTRUMENT]',
+                    arguments: {
+                        INSTRUMENT: {
+                            type: ArgumentType.NUMBER,
+                            menu: 'instruments',
+                            defaultValue: 1
+                        }
+                    }
+                }, {
+                    opcode: 'setTempo',
+                    blockType: BlockType.COMMAND,
+                    text: 'set tempo to [TEMPO]',
+                    arguments: {
+                        TEMPO: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 60
+                        }
+                    }
+                }, {
+                    opcode: 'changeTempo',
+                    blockType: BlockType.COMMAND,
+                    text: 'change tempo by [TEMPO]',
+                    arguments: {
+                        TEMPO: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 20
+                        }
+                    }
+                }, {
+                    opcode: 'getTempo',
+                    text: 'tempo',
+                    blockType: BlockType.REPORTER
+                }],
+                menus: {
+                    drums: this._buildMenu(this.DRUM_INFO),
+                    instruments: this._buildMenu(this.INSTRUMENT_INFO)
+                }
+            };
+        }
+
+        /**
+         * Play a drum sound for some number of beats.
+         * @param {object} args - the block arguments.
+         * @param {object} util - utility object provided by the runtime.
+         * @property {int} DRUM - the number of the drum to play.
+         * @property {number} BEATS - the duration in beats of the drum sound.
+         */
+
+    }, {
+        key: 'playDrumForBeats',
+        value: function playDrumForBeats(args, util) {
+            if (this._stackTimerNeedsInit(util)) {
+                var drum = Cast.toNumber(args.DRUM);
+                drum = Math.round(drum);
+                drum -= 1; // drums are one-indexed
+                drum = MathUtil.wrapClamp(drum, 0, this.DRUM_INFO.length - 1);
+                var beats = Cast.toNumber(args.BEATS);
+                beats = this._clampBeats(beats);
+                this._playDrumNum(util, drum);
+                this._startStackTimer(util, this._beatsToSec(beats));
+            } else {
+                this._checkStackTimer(util);
+            }
+        }
+
+        /**
+         * Play a drum sound using its 0-indexed number.
+         * @param {object} util - utility object provided by the runtime.
+         * @param  {number} drumNum - the number of the drum to play.
+         * @private
+         */
+
+    }, {
+        key: '_playDrumNum',
+        value: function _playDrumNum(util, drumNum) {
+            var _this3 = this;
+
+            if (util.runtime.audioEngine === null) return;
+            if (util.target.audioPlayer === null) return;
+            // If we're playing too many sounds, do not play the drum sound.
+            if (this._concurrencyCounter > Scratch3MusicBlocks.CONCURRENCY_LIMIT) {
+                return;
+            }
+            var outputNode = util.target.audioPlayer.getInputNode();
+            var context = util.runtime.audioEngine.audioContext;
+            var bufferSource = context.createBufferSource();
+            bufferSource.buffer = this._drumBuffers[drumNum];
+            bufferSource.connect(outputNode);
+            bufferSource.start();
+            this._concurrencyCounter++;
+            bufferSource.onended = function () {
+                _this3._concurrencyCounter--;
+            };
+        }
+
+        /**
+         * Rest for some number of beats.
+         * @param {object} args - the block arguments.
+         * @param {object} util - utility object provided by the runtime.
+         * @property {number} BEATS - the duration in beats of the rest.
+         */
+
+    }, {
+        key: 'restForBeats',
+        value: function restForBeats(args, util) {
+            if (this._stackTimerNeedsInit(util)) {
+                var beats = Cast.toNumber(args.BEATS);
+                beats = this._clampBeats(beats);
+                this._startStackTimer(util, this._beatsToSec(beats));
+            } else {
+                this._checkStackTimer(util);
+            }
+        }
+
+        /**
+         * Play a note using the current musical instrument for some number of beats.
+         * This function processes the arguments, and handles the timing of the block's execution.
+         * @param {object} args - the block arguments.
+         * @param {object} util - utility object provided by the runtime.
+         * @property {number} NOTE - the pitch of the note to play, interpreted as a MIDI note number.
+         * @property {number} BEATS - the duration in beats of the note.
+         */
+
+    }, {
+        key: 'playNoteForBeats',
+        value: function playNoteForBeats(args, util) {
+            if (this._stackTimerNeedsInit(util)) {
+                var note = Cast.toNumber(args.NOTE);
+                note = MathUtil.clamp(note, Scratch3MusicBlocks.MIDI_NOTE_RANGE.min, Scratch3MusicBlocks.MIDI_NOTE_RANGE.max);
+                var beats = Cast.toNumber(args.BEATS);
+                beats = this._clampBeats(beats);
+                // If the duration is 0, do not play the note. In Scratch 2.0, "play drum for 0 beats" plays the drum,
+                // but "play note for 0 beats" is silent.
+                if (beats === 0) return;
+
+                var durationSec = this._beatsToSec(beats);
+
+                this._playNote(util, note, durationSec);
+
+                this._startStackTimer(util, durationSec);
+            } else {
+                this._checkStackTimer(util);
+            }
+        }
+
+        /**
+         * Play a note using the current instrument for a duration in seconds.
+         * This function actually plays the sound, and handles the timing of the sound, including the
+         * "release" portion of the sound, which continues briefly after the block execution has finished.
+         * @param {object} util - utility object provided by the runtime.
+         * @param {number} note - the pitch of the note to play, interpreted as a MIDI note number.
+         * @param {number} durationSec - the duration in seconds to play the note.
+         * @private
+         */
+
+    }, {
+        key: '_playNote',
+        value: function _playNote(util, note, durationSec) {
+            var _this4 = this;
+
+            if (util.runtime.audioEngine === null) return;
+            if (util.target.audioPlayer === null) return;
+
+            // If we're playing too many sounds, do not play the note.
+            if (this._concurrencyCounter > Scratch3MusicBlocks.CONCURRENCY_LIMIT) {
+                return;
+            }
+
+            // Determine which of the audio samples for this instrument to play
+            var musicState = this._getMusicState(util.target);
+            var inst = musicState.currentInstrument;
+            var instrumentInfo = this.INSTRUMENT_INFO[inst];
+            var sampleArray = instrumentInfo.samples;
+            var sampleIndex = this._selectSampleIndexForNote(note, sampleArray);
+
+            // Create the audio buffer to play the note, and set its pitch
+            var context = util.runtime.audioEngine.audioContext;
+            var bufferSource = context.createBufferSource();
+            bufferSource.buffer = this._instrumentBufferArrays[inst][sampleIndex];
+            var sampleNote = sampleArray[sampleIndex];
+            bufferSource.playbackRate.value = this._ratioForPitchInterval(note - sampleNote);
+
+            // Create a gain node for this note, and connect it to the sprite's audioPlayer.
+            var gainNode = context.createGain();
+            bufferSource.connect(gainNode);
+            var outputNode = util.target.audioPlayer.getInputNode();
+            gainNode.connect(outputNode);
+
+            // Start playing the note
+            bufferSource.start();
+
+            // Schedule the release of the note, ramping its gain down to zero,
+            // and then stopping the sound.
+            var releaseDuration = this.INSTRUMENT_INFO[inst].releaseTime;
+            if (typeof releaseDuration === 'undefined') {
+                releaseDuration = 0.01;
+            }
+            var releaseStart = context.currentTime + durationSec;
+            var releaseEnd = releaseStart + releaseDuration;
+            gainNode.gain.setValueAtTime(1, releaseStart);
+            gainNode.gain.linearRampToValueAtTime(0.0001, releaseEnd);
+            bufferSource.stop(releaseEnd);
+
+            // Update the concurrency counter
+            this._concurrencyCounter++;
+            bufferSource.onended = function () {
+                _this4._concurrencyCounter--;
+            };
+        }
+
+        /**
+         * The samples array for each instrument is the set of pitches of the available audio samples.
+         * This function selects the best one to use to play a given input note, and returns its index
+         * in the samples array.
+         * @param  {number} note - the input note to select a sample for.
+         * @param  {number[]} samples - an array of the pitches of the available samples.
+         * @return {index} the index of the selected sample in the samples array.
+         * @private
+         */
+
+    }, {
+        key: '_selectSampleIndexForNote',
+        value: function _selectSampleIndexForNote(note, samples) {
+            // Step backwards through the array of samples, i.e. in descending pitch, in order to find
+            // the sample that is the closest one below (or matching) the pitch of the input note.
+            for (var i = samples.length - 1; i >= 0; i--) {
+                if (note >= samples[i]) {
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        /**
+         * Calcuate the frequency ratio for a given musical interval.
+         * @param  {number} interval - the pitch interval to convert.
+         * @return {number} a ratio corresponding to the input interval.
+         * @private
+         */
+
+    }, {
+        key: '_ratioForPitchInterval',
+        value: function _ratioForPitchInterval(interval) {
+            return Math.pow(2, interval / 12);
+        }
+
+        /**
+         * Clamp a duration in beats to the allowed min and max duration.
+         * @param  {number} beats - a duration in beats.
+         * @return {number} - the clamped duration.
+         * @private
+         */
+
+    }, {
+        key: '_clampBeats',
+        value: function _clampBeats(beats) {
+            return MathUtil.clamp(beats, Scratch3MusicBlocks.BEAT_RANGE.min, Scratch3MusicBlocks.BEAT_RANGE.max);
+        }
+
+        /**
+         * Convert a number of beats to a number of seconds, using the current tempo.
+         * @param  {number} beats - number of beats to convert to secs.
+         * @return {number} seconds - number of seconds `beats` will last.
+         * @private
+         */
+
+    }, {
+        key: '_beatsToSec',
+        value: function _beatsToSec(beats) {
+            return 60 / this.tempo * beats;
+        }
+
+        /**
+         * Check if the stack timer needs initialization.
+         * @param {object} util - utility object provided by the runtime.
+         * @return {boolean} - true if the stack timer needs to be initialized.
+         * @private
+         */
+
+    }, {
+        key: '_stackTimerNeedsInit',
+        value: function _stackTimerNeedsInit(util) {
+            return !util.stackFrame.timer;
+        }
+
+        /**
+         * Start the stack timer and the yield the thread if necessary.
+         * @param {object} util - utility object provided by the runtime.
+         * @param {number} duration - a duration in seconds to set the timer for.
+         * @private
+         */
+
+    }, {
+        key: '_startStackTimer',
+        value: function _startStackTimer(util, duration) {
+            util.stackFrame.timer = new Timer();
+            util.stackFrame.timer.start();
+            util.stackFrame.duration = duration;
+            util.yield();
+        }
+
+        /**
+         * Check the stack timer, and if its time is not up yet, yield the thread.
+         * @param {object} util - utility object provided by the runtime.
+         * @private
+         */
+
+    }, {
+        key: '_checkStackTimer',
+        value: function _checkStackTimer(util) {
+            var timeElapsed = util.stackFrame.timer.timeElapsed();
+            if (timeElapsed < util.stackFrame.duration * 1000) {
+                util.yield();
+            }
+        }
+
+        /**
+         * Select an instrument for playing notes.
+         * @param {object} args - the block arguments.
+         * @param {object} util - utility object provided by the runtime.
+         * @property {int} INSTRUMENT - the number of the instrument to select.
+         */
+
+    }, {
+        key: 'setInstrument',
+        value: function setInstrument(args, util) {
+            var musicState = this._getMusicState(util.target);
+            var instNum = Cast.toNumber(args.INSTRUMENT);
+            instNum = Math.round(instNum);
+            instNum -= 1; // instruments are one-indexed
+            instNum = MathUtil.wrapClamp(instNum, 0, this.INSTRUMENT_INFO.length - 1);
+            musicState.currentInstrument = instNum;
+        }
+
+        /**
+         * Set the current tempo to a new value.
+         * @param {object} args - the block arguments.
+         * @property {number} TEMPO - the tempo, in beats per minute.
+         */
+
+    }, {
+        key: 'setTempo',
+        value: function setTempo(args) {
+            var tempo = Cast.toNumber(args.TEMPO);
+            this._updateTempo(tempo);
+        }
+
+        /**
+         * Change the current tempo by some amount.
+         * @param {object} args - the block arguments.
+         * @property {number} TEMPO - the amount to change the tempo, in beats per minute.
+         */
+
+    }, {
+        key: 'changeTempo',
+        value: function changeTempo(args) {
+            var change = Cast.toNumber(args.TEMPO);
+            var tempo = change + this.tempo;
+            this._updateTempo(tempo);
+        }
+
+        /**
+         * Update the current tempo, clamping it to the min and max allowable range.
+         * @param {number} tempo - the tempo to set, in beats per minute.
+         * @private
+         */
+
+    }, {
+        key: '_updateTempo',
+        value: function _updateTempo(tempo) {
+            tempo = MathUtil.clamp(tempo, Scratch3MusicBlocks.TEMPO_RANGE.min, Scratch3MusicBlocks.TEMPO_RANGE.max);
+            this.tempo = tempo;
+        }
+
+        /**
+         * Get the current tempo.
+         * @return {number} - the current tempo, in beats per minute.
+         */
+
+    }, {
+        key: 'getTempo',
+        value: function getTempo() {
+            return this.tempo;
+        }
+    }, {
+        key: 'DRUM_INFO',
+        get: function get() {
+            return [{
+                name: '(1) Snare Drum',
+                fileName: '1-snare'
+            }, {
+                name: '(2) Bass Drum',
+                fileName: '2-bass-drum'
+            }, {
+                name: '(3) Side Stick',
+                fileName: '3-side-stick'
+            }, {
+                name: '(4) Crash Cymbal',
+                fileName: '4-crash-cymbal'
+            }, {
+                name: '(5) Open Hi-Hat',
+                fileName: '5-open-hi-hat'
+            }, {
+                name: '(6) Closed Hi-Hat',
+                fileName: '6-closed-hi-hat'
+            }, {
+                name: '(7) Tambourine',
+                fileName: '7-tambourine'
+            }, {
+                name: '(8) Hand Clap',
+                fileName: '8-hand-clap'
+            }, {
+                name: '(9) Claves',
+                fileName: '9-claves'
+            }, {
+                name: '(10) Wood Block',
+                fileName: '10-wood-block'
+            }, {
+                name: '(11) Cowbell',
+                fileName: '11-cowbell'
+            }, {
+                name: '(12) Triangle',
+                fileName: '12-triangle'
+            }, {
+                name: '(13) Bongo',
+                fileName: '13-bongo'
+            }, {
+                name: '(14) Conga',
+                fileName: '14-conga'
+            }, {
+                name: '(15) Cabasa',
+                fileName: '15-cabasa'
+            }, {
+                name: '(16) Guiro',
+                fileName: '16-guiro'
+            }, {
+                name: '(17) Vibraslap',
+                fileName: '17-vibraslap'
+            }, {
+                name: '(18) Cuica',
+                fileName: '18-cuica'
+            }];
+        }
+
+        /**
+         * An array of info about each instrument.
+         * @type {object[]} an array of objects.
+         * @param {string} name - the translatable name to display in the instruments menu.
+         * @param {string} dirName - the name of the directory containing audio samples for this instrument.
+         * @param {number} [releaseTime] - an optional duration for the release portion of each note.
+         * @param {number[]} samples - an array of numbers representing the MIDI note number for each
+         *                           sampled sound used to play this instrument.
+         */
+
+    }, {
+        key: 'INSTRUMENT_INFO',
+        get: function get() {
+            return [{
+                name: '(1) Piano',
+                dirName: '1-piano',
+                releaseTime: 0.5,
+                samples: [24, 36, 48, 60, 72, 84, 96, 108]
+            }, {
+                name: '(2) Electric Piano',
+                dirName: '2-electric-piano',
+                releaseTime: 0.5,
+                samples: [60]
+            }, {
+                name: '(3) Organ',
+                dirName: '3-organ',
+                releaseTime: 0.5,
+                samples: [60]
+            }, {
+                name: '(4) Guitar',
+                dirName: '4-guitar',
+                releaseTime: 0.5,
+                samples: [60]
+            }, {
+                name: '(5) Electric Guitar',
+                dirName: '5-electric-guitar',
+                releaseTime: 0.5,
+                samples: [60]
+            }, {
+                name: '(6) Bass',
+                dirName: '6-bass',
+                releaseTime: 0.25,
+                samples: [36, 48]
+            }, {
+                name: '(7) Pizzicato',
+                dirName: '7-pizzicato',
+                releaseTime: 0.25,
+                samples: [60]
+            }, {
+                name: '(8) Cello',
+                dirName: '8-cello',
+                releaseTime: 0.1,
+                samples: [36, 48, 60]
+            }, {
+                name: '(9) Trombone',
+                dirName: '9-trombone',
+                samples: [36, 48, 60]
+            }, {
+                name: '(10) Clarinet',
+                dirName: '10-clarinet',
+                samples: [48, 60]
+            }, {
+                name: '(11) Saxophone',
+                dirName: '11-saxophone',
+                samples: [36, 60, 84]
+            }, {
+                name: '(12) Flute',
+                dirName: '12-flute',
+                samples: [60, 72]
+            }, {
+                name: '(13) Wooden Flute',
+                dirName: '13-wooden-flute',
+                samples: [60, 72]
+            }, {
+                name: '(14) Bassoon',
+                dirName: '14-bassoon',
+                samples: [36, 48, 60]
+            }, {
+                name: '(15) Choir',
+                dirName: '15-choir',
+                releaseTime: 0.25,
+                samples: [48, 60, 72]
+            }, {
+                name: '(16) Vibraphone',
+                dirName: '16-vibraphone',
+                releaseTime: 0.5,
+                samples: [60, 72]
+            }, {
+                name: '(17) Music Box',
+                dirName: '17-music-box',
+                releaseTime: 0.25,
+                samples: [60]
+            }, {
+                name: '(18) Steel Drum',
+                dirName: '18-steel-drum',
+                releaseTime: 0.5,
+                samples: [60]
+            }, {
+                name: '(19) Marimba',
+                dirName: '19-marimba',
+                samples: [60]
+            }, {
+                name: '(20) Synth Lead',
+                dirName: '20-synth-lead',
+                releaseTime: 0.1,
+                samples: [60]
+            }, {
+                name: '(21) Synth Pad',
+                dirName: '21-synth-pad',
+                releaseTime: 0.25,
+                samples: [60]
+            }];
+        }
+
+        /**
+         * The key to load & store a target's music-related state.
+         * @type {string}
+         */
+
+    }], [{
+        key: 'STATE_KEY',
+        get: function get() {
+            return 'Scratch.music';
+        }
+
+        /**
+         * The default music-related state, to be used when a target has no existing music state.
+         * @type {MusicState}
+         */
+
+    }, {
+        key: 'DEFAULT_MUSIC_STATE',
+        get: function get() {
+            return {
+                currentInstrument: 0
+            };
+        }
+
+        /**
+         * The minimum and maximum MIDI note numbers, for clamping the input to play note.
+         * @type {{min: number, max: number}}
+         */
+
+    }, {
+        key: 'MIDI_NOTE_RANGE',
+        get: function get() {
+            return { min: 0, max: 130 };
+        }
+
+        /**
+         * The minimum and maximum beat values, for clamping the duration of play note, play drum and rest.
+         * 100 beats at the default tempo of 60bpm is 100 seconds.
+         * @type {{min: number, max: number}}
+         */
+
+    }, {
+        key: 'BEAT_RANGE',
+        get: function get() {
+            return { min: 0, max: 100 };
+        }
+
+        /** The minimum and maximum tempo values, in bpm.
+         * @type {{min: number, max: number}}
+         */
+
+    }, {
+        key: 'TEMPO_RANGE',
+        get: function get() {
+            return { min: 20, max: 500 };
+        }
+
+        /**
+         * The maximum number of sounds to allow to play simultaneously.
+         * @type {number}
+         */
+
+    }, {
+        key: 'CONCURRENCY_LIMIT',
+        get: function get() {
+            return 30;
+        }
+    }]);
+
+    return Scratch3MusicBlocks;
+}();
+
+module.exports = Scratch3MusicBlocks;
 
 /***/ }),
 /* 89 */
@@ -29098,9 +29648,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 var EventEmitter = __webpack_require__(5);
 
 var centralDispatch = __webpack_require__(39);
-var ExtensionManager = __webpack_require__(88);
+var ExtensionManager = __webpack_require__(87);
 var log = __webpack_require__(1);
-var Runtime = __webpack_require__(85);
+var Runtime = __webpack_require__(84);
 var sb2 = __webpack_require__(93);
 var sb3 = __webpack_require__(95);
 var StringUtil = __webpack_require__(17);
@@ -29692,6 +30242,7 @@ var VirtualMachine = function (_EventEmitter) {
                 if (!sprite) {
                     throw new Error('No sprite associated with this target.');
                 }
+                this.runtime.requestRemoveMonitorByTargetId(targetId);
                 var currentEditingTarget = this.editingTarget;
                 for (var i = 0; i < sprite.clones.length; i++) {
                     var clone = sprite.clones[i];
@@ -44538,7 +45089,7 @@ function extend() {
 /* 178 */
 /***/ (function(module, exports) {
 
-module.exports = {"name":"scratch-vm","version":"0.1.0","description":"Virtual Machine for Scratch 3.0","author":"Massachusetts Institute of Technology","license":"BSD-3-Clause","homepage":"https://github.com/LLK/scratch-vm#readme","repository":{"type":"git","url":"git+ssh://git@github.com/LLK/scratch-vm.git"},"main":"./dist/node/scratch-vm.js","scripts":{"build":"webpack --progress --colors --bail","coverage":"tap ./test/{unit,integration}/*.js --coverage --coverage-report=lcov","deploy":"touch playground/.nojekyll && gh-pages -t -d playground -m \"Build for $(git log --pretty=format:%H -n1)\"","lint":"eslint .","prepublish":"in-publish && npm run build || not-in-publish","start":"webpack-dev-server","tap":"tap ./test/{unit,integration}/*.js","tap:unit":"tap ./test/unit/*.js","tap:integration":"tap ./test/integration/*.js","test":"npm run lint && npm run tap","watch":"webpack --progress --colors --watch","version":"json -f package.json -I -e \"this.repository.sha = '$(git log -n1 --pretty=format:%H)'\""},"devDependencies":{"adm-zip":"0.4.7","babel-core":"^6.24.1","babel-eslint":"^7.1.1","babel-loader":"^7.0.0","babel-preset-es2015":"^6.24.1","copy-webpack-plugin":"4.0.1","escape-html":"1.0.3","eslint":"^4.5.0","eslint-config-scratch":"^4.0.0","expose-loader":"0.7.3","gh-pages":"^0.12.0","got":"5.7.1","highlightjs":"^9.8.0","htmlparser2":"3.9.2","immutable":"3.8.1","in-publish":"^2.0.0","json":"^9.0.4","lodash.defaultsdeep":"4.6.0","minilog":"3.1.0","promise":"7.1.1","scratch-audio":"latest","scratch-blocks":"latest","scratch-render":"latest","scratch-storage":"^0.3.0","script-loader":"0.7.0","socket.io-client":"1.7.3","stats.js":"^0.17.0","tap":"^10.2.0","tiny-worker":"^2.1.1","webpack":"^2.4.1","webpack-dev-server":"^2.4.1","worker-loader":"0.8.1"}}
+module.exports = {"name":"scratch-vm","version":"0.1.0","description":"Virtual Machine for Scratch 3.0","author":"Massachusetts Institute of Technology","license":"BSD-3-Clause","homepage":"https://github.com/LLK/scratch-vm#readme","repository":{"type":"git","url":"git+ssh://git@github.com/LLK/scratch-vm.git"},"main":"./dist/node/scratch-vm.js","scripts":{"build":"webpack --progress --colors --bail","coverage":"tap ./test/{unit,integration}/*.js --coverage --coverage-report=lcov","deploy":"touch playground/.nojekyll && gh-pages -t -d playground -m \"Build for $(git log --pretty=format:%H -n1)\"","lint":"eslint .","prepublish":"in-publish && npm run build || not-in-publish","start":"webpack-dev-server","tap":"tap ./test/{unit,integration}/*.js","tap:unit":"tap ./test/unit/*.js","tap:integration":"tap ./test/integration/*.js","test":"npm run lint && npm run tap","watch":"webpack --progress --colors --watch","version":"json -f package.json -I -e \"this.repository.sha = '$(git log -n1 --pretty=format:%H)'\""},"devDependencies":{"adm-zip":"0.4.7","babel-core":"^6.24.1","babel-eslint":"^7.1.1","babel-loader":"^7.0.0","babel-preset-es2015":"^6.24.1","copy-webpack-plugin":"4.2.1","escape-html":"1.0.3","eslint":"^4.5.0","eslint-config-scratch":"^5.0.0","expose-loader":"0.7.4","gh-pages":"^1.1.0","got":"5.7.1","highlightjs":"^9.8.0","htmlparser2":"3.9.2","immutable":"3.8.1","in-publish":"^2.0.0","json":"^9.0.4","lodash.defaultsdeep":"4.6.0","minilog":"3.1.0","promise":"8.0.1","scratch-audio":"latest","scratch-blocks":"latest","scratch-render":"latest","scratch-storage":"^0.3.0","script-loader":"0.7.2","socket.io-client":"2.0.4","stats.js":"^0.17.0","tap":"^10.2.0","tiny-worker":"^2.1.1","webpack":"^2.4.1","webpack-dev-server":"^2.4.1","worker-loader":"1.1.0"}}
 
 /***/ }),
 /* 179 */
