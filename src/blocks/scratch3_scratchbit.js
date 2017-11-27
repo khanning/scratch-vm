@@ -339,7 +339,7 @@ class Scratch3ScratchBitBlocks {
                 },
                 {
                     opcode: 'isMoving',
-                    text: 'is moving?',
+                    text: 'moving?',
                     blockType: BlockType.BOOLEAN
                 },
                 {
