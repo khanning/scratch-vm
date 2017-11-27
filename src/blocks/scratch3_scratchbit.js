@@ -61,6 +61,7 @@ class ScratchBit {
         };
 
         this._gestures = {
+            'moving': false,
             'move': {
                 active: false,
                 timeout: false
@@ -187,8 +188,12 @@ class ScratchBit {
         this._sensors.gMagD = this._sensors.gMag - tmp;
         this._sensors.gMag = tmp;
 
-        if (Math.abs(this._sensors.aMagD) > 0.13)
+        if (Math.abs(this._sensors.aMagD) > 0.1) {
+            this._gestures[Gesture.MOVING] = true;
             this._setGestureTimeout(Gesture.MOVE, 250);
+        } else if (Math.abs(this._sensors.aMagD) < 0.006) {
+            this._gestures[Gesture.MOVING] = false;
+        }
 
         if (Math.abs(this._sensors.aMagD) > 0.9)
             this._setGestureTimeout(Gesture.SHAKE, 300);
@@ -256,6 +261,7 @@ const TiltDirection = {
 
 const Gesture = {
     MOVE: 'move',
+    MOVING: 'moving',
     SHAKE: 'shake',
     JUMP: 'jump'
 };
@@ -332,9 +338,21 @@ class Scratch3ScratchBitBlocks {
                     blockType: BlockType.HAT
                 },
                 {
+                    opcode: 'isMoving',
+                    text: 'is moving?',
+                    blockType: BlockType.BOOLEAN
+                },
+                {
                     opcode: 'whenDark',
-                    text: 'when dark',
-                    blockType: BlockType.HAT
+                    text: 'when [LIGHT]',
+                    blockType: BlockType.HAT,
+                    arguments: {
+                        LIGHT: {
+                            type: ArgumentType.STRING,
+                            menu: 'lightLevel',
+                            defaultValue: 'dark'
+                        }
+                    }
                 },
                 {
                     opcode: 'getBrightness',
@@ -379,6 +397,7 @@ class Scratch3ScratchBitBlocks {
                 }
             ],
             menus: {
+                lightLevel: ['dark', 'light'],
                 tiltDirection: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT],
                 tiltDirectionAny:
                     [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
@@ -428,6 +447,10 @@ class Scratch3ScratchBitBlocks {
         return this._device._isGesture(Gesture.JUMP);
     }
 
+    isMoving () {
+        return this._device._gestures['moving'];
+    }
+
     /**
      * Compare the distance sensor's value to a reference.
      * @param {object} args - the block's arguments.
@@ -435,8 +458,11 @@ class Scratch3ScratchBitBlocks {
      * @property {number} REFERENCE - the value to compare against.
      * @return {boolean} - the result of the comparison, or false on error.
      */
-    whenDark () {
-        return this._device.brightness < Scratch3ScratchBitBlocks.DARK_THRESHOLD;
+    whenDark (args) {
+        if (args.LIGHT === 'dark')
+          return this._device.brightness < Scratch3ScratchBitBlocks.DARK_THRESHOLD;
+        else
+          return this._device.brightness > Scratch3ScratchBitBlocks.DARK_THRESHOLD;
     }
 
     /**
