@@ -60,6 +60,21 @@ class ScratchBit {
             brightness: 10
         };
 
+        this._gestures = {
+            'move': {
+                active: false,
+                timeout: false
+            },
+            'shake': {
+                active: false,
+                timeout: false
+            },
+            'jump': {
+                active: false,
+                timeout: false
+            }
+        };
+
         this._onRxChar = this._onRxChar.bind(this);
         this._onDisconnect = this._onDisconnect.bind(this);
 
@@ -95,35 +110,21 @@ class ScratchBit {
         return Math.round(sBrightness);
     }
 
+    _setGestureTimeout (g, t) {
+        var gesture = this._gestures[g];
+          if (gesture.timeout) return;
+        gesture.active = true;
+        gesture.timeout = true;
+        setTimeout(function() {
+            gesture.active = false;
+        }, t/2);
+        setTimeout(function() {
+            gesture.timeout = false;
+        }, t);
+    }
+
     _isGesture (g) {
-        switch (g) {
-            case Gesture.MOVE:
-                if (Math.abs(this._sensors.aMagD) < 0.13 || GestureTimeout.MOVE)
-                    return false;
-                GestureTimeout.MOVE = true;
-                setTimeout(function() {
-                    GestureTimeout.MOVE = false;
-                }, 250);
-                return true;
-            case Gesture.SHAKE:
-                if (Math.abs(this._sensors.aMagD) < 0.9 || GestureTimeout.SHAKE)
-                    return false;
-                GestureTimeout.SHAKE = true;
-                setTimeout(function() {
-                  GestureTimeout.SHAKE = false;
-                }, 300);
-                return true;
-            case Gesture.JUMP:
-                if (this._sensors.aMag > 0.2 || GestureTimeout.JUMP)
-                    return false;
-                GestureTimeout.JUMP = true;
-                setTimeout(function() {
-                  GestureTimeout.JUMP = false;
-                }, 500);
-                return true;
-            default:
-                return false;
-        }
+        return this._gestures[g].active;
     }
 
     /**
@@ -185,6 +186,17 @@ class ScratchBit {
         tmp = tmp / 10000000;
         this._sensors.gMagD = this._sensors.gMag - tmp;
         this._sensors.gMag = tmp;
+
+        if (Math.abs(this._sensors.aMagD) > 0.13)
+            this._setGestureTimeout(Gesture.MOVE, 250);
+
+        if (Math.abs(this._sensors.aMagD) > 0.9)
+            this._setGestureTimeout(Gesture.SHAKE, 300);
+
+        if (this._gestures[Gesture.JUMP].active && this._sensors.aMag > 0.5)
+            this._gestures[Gesture.JUMP].active = false;
+        else if (this._sensors.aMag < 0.2)
+            this._gestures[Gesture.JUMP].active = true;
     }
 
     /**
@@ -246,12 +258,6 @@ const Gesture = {
     MOVE: 'move',
     SHAKE: 'shake',
     JUMP: 'jump'
-};
-
-const GestureTimeout = {
-    MOVE: false,
-    SHAKE: false,
-    JUMP: false
 };
 
 /**
