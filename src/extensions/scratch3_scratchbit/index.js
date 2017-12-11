@@ -285,11 +285,12 @@ class Scratch3ScratchBitBlocks {
         return 'scratchbit';
     }
 
-    /**
-     * @return {number} - the tilt sensor counts as "tilted" if its tilt angle meets or exceeds this threshold.
-     */
     static get DARK_THRESHOLD () {
         return 15;
+    }
+
+    static get BRIGHT_THRESHOLD () {
+        return 70;
     }
 
     /**
@@ -344,7 +345,7 @@ class Scratch3ScratchBitBlocks {
                 },
                 {
                     opcode: 'whenDark',
-                    text: 'when [LIGHT]',
+                    text: 'when it becomes [LIGHT]',
                     blockType: BlockType.HAT,
                     arguments: {
                         LIGHT: {
@@ -397,7 +398,7 @@ class Scratch3ScratchBitBlocks {
                 }
             ],
             menus: {
-                lightLevel: ['dark', 'light'],
+                lightLevel: ['dark', 'bright'],
                 tiltDirection: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT],
                 tiltDirectionAny:
                     [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
@@ -462,7 +463,7 @@ class Scratch3ScratchBitBlocks {
         if (args.LIGHT === 'dark')
           return this._device.brightness < Scratch3ScratchBitBlocks.DARK_THRESHOLD;
         else
-          return this._device.brightness > Scratch3ScratchBitBlocks.DARK_THRESHOLD;
+          return this._device.brightness > Scratch3ScratchBitBlocks.BRIGHT_THRESHOLD;
     }
 
     /**
