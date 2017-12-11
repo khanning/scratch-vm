@@ -195,7 +195,7 @@ class ScratchBit {
             this._gestures[Gesture.MOVING] = false;
         }
 
-        if (Math.abs(this._sensors.aMagD) > 0.9)
+        if (Math.abs(this._sensors.aMagD) > 0.8)
             this._setGestureTimeout(Gesture.SHAKE, 300);
 
         if (this._gestures[Gesture.JUMP].active && this._sensors.aMag > 0.5)
