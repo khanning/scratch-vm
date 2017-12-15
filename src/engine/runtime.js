@@ -386,6 +386,14 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Event name for reporting that blocksInfo was updated.
+     * @const {string}
+     */
+    static get BLOCKSINFO_UPDATE () {
+        return 'BLOCKSINFO_UPDATE';
+    }
+
+    /**
      * How rapidly we try to step threads by default, in ms.
      */
     static get THREAD_STEP_INTERVAL () {
@@ -498,6 +506,41 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Reregister the primitives for an extension
+     * @param  {ExtensionInfo} extensionInfo - new info (results of running getInfo)
+     *                                         for an extension
+     * @private
+     */
+    _refreshExtensionPrimitives (extensionInfo) {
+        let extensionBlocks = [];
+        for (const categoryInfo of this._blockInfo) {
+            if (extensionInfo.id === categoryInfo.id) {
+                categoryInfo.blocks = [];
+                categoryInfo.menus = [];
+                for (const menuName in extensionInfo.menus) {
+                    if (extensionInfo.menus.hasOwnProperty(menuName)) {
+                        const menuItems = extensionInfo.menus[menuName];
+                        const convertedMenu = this._buildMenuForScratchBlocks(menuName, menuItems, categoryInfo);
+                        categoryInfo.menus.push(convertedMenu);
+                    }
+                }
+                for (const blockInfo of extensionInfo.blocks) {
+                    const convertedBlock = this._convertForScratchBlocks(blockInfo, categoryInfo);
+                    const opcode = convertedBlock.json.type;
+                    categoryInfo.blocks.push(convertedBlock);
+                    this._primitives[opcode] = convertedBlock.info.func;
+                    if (blockInfo.blockType === BlockType.HAT) {
+                        this._hats[opcode] = {edgeActivated: true}; /** @TODO let extension specify this */
+                    }
+                }
+                extensionBlocks = extensionBlocks.concat(categoryInfo.blocks, categoryInfo.menus);
+            }
+        }
+
+        this.emit(Runtime.BLOCKSINFO_UPDATE, extensionBlocks);
+    }
+
+    /**
      * Build the scratch-blocks JSON for a menu. Note that scratch-blocks treats menus as a special kind of block.
      * @param {string} menuName - the name of the menu
      * @param {array} menuItems - the list of items for this menu
@@ -559,7 +602,7 @@ class Runtime extends EventEmitter {
             category: categoryInfo.name,
             colour: categoryInfo.color1,
             colourSecondary: categoryInfo.color2,
-            colorTertiary: categoryInfo.color3,
+            colourTertiary: categoryInfo.color3,
             args0: []
         };
 

@@ -7,6 +7,7 @@ const Runtime = require('./engine/runtime');
 const sb2 = require('./serialization/sb2');
 const sb3 = require('./serialization/sb3');
 const StringUtil = require('./util/string-util');
+const formatMessage = require('format-message');
 
 const {loadCostume} = require('./import/load-costume.js');
 const {loadSound} = require('./import/load-sound.js');
@@ -36,6 +37,13 @@ class VirtualMachine extends EventEmitter {
          * @type {Target}
          */
         this.editingTarget = null;
+
+        /**
+         * The currently dragging target, for redirecting IO data.
+         * @type {Target}
+         */
+        this._dragTarget = null;
+
         // Runtime emits are passed along as VM emits.
         this.runtime.on(Runtime.SCRIPT_GLOW_ON, glowData => {
             this.emit(Runtime.SCRIPT_GLOW_ON, glowData);
@@ -66,6 +74,9 @@ class VirtualMachine extends EventEmitter {
         });
         this.runtime.on(Runtime.EXTENSION_ADDED, blocksInfo => {
             this.emit(Runtime.EXTENSION_ADDED, blocksInfo);
+        });
+        this.runtime.on(Runtime.BLOCKSINFO_UPDATE, blocksInfo => {
+            this.emit(Runtime.BLOCKSINFO_UPDATE, blocksInfo);
         });
 
         this.extensionManager = new ExtensionManager(this.runtime);
@@ -553,6 +564,18 @@ class VirtualMachine extends EventEmitter {
     }
 
     /**
+     * set the current locale and builtin messages for the VM
+     * @param {[type]} locale       current locale
+     * @param {[type]} messages     builtin messages map for current locale
+     */
+    setLocale (locale, messages) {
+        if (locale !== formatMessage.setup().locale) {
+            formatMessage.setup({locale: locale, translations: {[locale]: messages}});
+            this.extensionManager.refreshBlocks();
+        }
+    }
+
+    /**
      * Handle a Blockly event for the current editing target.
      * @param {!Blockly.Event} e Any Blockly event.
      */
@@ -692,8 +715,8 @@ class VirtualMachine extends EventEmitter {
     startDrag (targetId) {
         const target = this.runtime.getTargetById(targetId);
         if (target) {
+            this._dragTarget = target;
             target.startDrag();
-            this.setEditingTarget(target.id);
         }
     }
 
@@ -703,15 +726,23 @@ class VirtualMachine extends EventEmitter {
      */
     stopDrag (targetId) {
         const target = this.runtime.getTargetById(targetId);
-        if (target) target.stopDrag();
+        if (target) {
+            this._dragTarget = null;
+            target.stopDrag();
+            this.setEditingTarget(target.id);
+        }
     }
 
     /**
-     * Post/edit sprite info for the current editing target.
+     * Post/edit sprite info for the current editing target or the drag target.
      * @param {object} data An object with sprite info data to set.
      */
     postSpriteInfo (data) {
-        this.editingTarget.postSpriteInfo(data);
+        if (this._dragTarget) {
+            this._dragTarget.postSpriteInfo(data);
+        } else {
+            this.editingTarget.postSpriteInfo(data);
+        }
     }
 }
 
