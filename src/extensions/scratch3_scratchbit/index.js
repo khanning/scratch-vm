@@ -188,7 +188,7 @@ class ScratchBit {
         this._sensors.gMagD = this._sensors.gMag - tmp;
         this._sensors.gMag = tmp;
 
-        if (Math.abs(this._sensors.aMagD) > 0.1) {
+        if (Math.abs(this._sensors.aMagD) > 0.02) {
             this._gestures[Gesture.MOVING] = true;
             this._setGestureTimeout(Gesture.MOVE, 250);
         } else if (Math.abs(this._sensors.aMagD) < 0.006) {
