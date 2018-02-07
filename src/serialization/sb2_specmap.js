@@ -360,12 +360,12 @@ const specMap = {
         ]
     },
     'costumeIndex': {
-        opcode: 'looks_costumeorder',
+        opcode: 'looks_costumenumbername',
         argMap: [
         ]
     },
     'sceneName': {
-        opcode: 'looks_backdropname',
+        opcode: 'looks_backdropnumbername',
         argMap: [
         ]
     },
@@ -390,7 +390,7 @@ const specMap = {
         ]
     },
     'backgroundIndex': {
-        opcode: 'looks_backdroporder',
+        opcode: 'looks_backdropnumbername',
         argMap: [
         ]
     },
@@ -861,9 +861,8 @@ const specMap = {
         opcode: 'sensing_keypressed',
         argMap: [
             {
-                type: 'input',
-                inputOp: 'sensing_keyoptions',
-                inputName: 'KEY_OPTION'
+                type: 'field',
+                fieldName: 'KEY_OPTION'
             }
         ]
     },
@@ -936,9 +935,8 @@ const specMap = {
         opcode: 'sensing_of',
         argMap: [
             {
-                type: 'input',
-                inputOp: 'sensing_of_property_menu',
-                inputName: 'PROPERTY'
+                type: 'field',
+                fieldName: 'PROPERTY'
             },
             {
                 type: 'input',
