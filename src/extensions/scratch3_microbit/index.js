@@ -538,7 +538,7 @@ class Scratch3MicroBitBlocks {
     }
 
     displayText (args) {
-        window.postMessage({type: 'command', uuid: 'text', buffer: args.TEXT}, '*');
+        window.postMessage({type: 'command', uuid: 'text', buffer: String(args.TEXT)}, '*');
         return;
     }
 
