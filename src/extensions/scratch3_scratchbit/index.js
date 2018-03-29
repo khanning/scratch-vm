@@ -51,6 +51,7 @@ class ScratchBit {
          */
         this._sensors = {
             gf: 0,
+            btn: 0,
             tiltX: 0,
             tiltY: 0,
             tiltZ: 0,
@@ -134,6 +135,10 @@ class ScratchBit {
         }, t);
     }
 
+    _isPressed () {
+        return this._sensors.btn;
+    }
+
     _isGesture (g) {
         return this._gestures[g].active;
     }
@@ -174,6 +179,8 @@ class ScratchBit {
                 this._runtime.greenFlag();
             }
         }
+
+        this._sensors.btn = (data[2] >> 1) & 1;
 
         this._sensors.brightness = (data[0] & 0x3F) << 4 | data[1] >> 4;
 
@@ -343,6 +350,11 @@ class Scratch3ScratchBitBlocks {
             blockIconURI: iconURI,
             blocks: [
                 {
+                    opcode: 'whenPressed',
+                    text: 'when button pressed',
+                    blockType: BlockType.HAT
+                },
+                {
                     opcode: 'whenMoved',
                     text: 'when moved',
                     blockType: BlockType.HAT
@@ -468,6 +480,10 @@ class Scratch3ScratchBitBlocks {
                     //log.warn('Ignoring failure from stale ScratchBit connection attempt');
                 //}
             //});
+    }
+
+    whenPressed () {
+        return this._device._isPressed();
     }
 
     whenMoved () {
