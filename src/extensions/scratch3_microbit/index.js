@@ -54,9 +54,7 @@ class MicroBit {
             tiltY: 0,
             buttonA: 0,
             buttonB: 0,
-            p0: 0,
-            p1: 0,
-            p2: 0,
+            touchPins: [0, 0, 0],
             gestureState: 0
         };
 
@@ -140,6 +138,10 @@ class MicroBit {
         return this._gestures[g].active;
     }
 
+    _checkPinState (pin) {
+        return this._sensors.touchPins[pin];
+    }
+
     /**
      * Attach event handlers to the device socket.
      * @private
@@ -187,9 +189,9 @@ class MicroBit {
         this._sensors.buttonA = data[4];
         this._sensors.buttonB = data[5];
 
-        this._sensors.p0 = data[6];
-        this._sensors.p1 = data[7];
-        this._sensors.p2 = data[8];
+        this._sensors.touchPins[0] = data[6];
+        this._sensors.touchPins[1] = data[7];
+        this._sensors.touchPins[2] = data[8];
 
         this._sensors.gestureState = data[9];
 
@@ -466,6 +468,18 @@ class Scratch3MicroBitBlocks {
                             defaultValue: TiltDirection.FRONT
                         }
                     }
+                },
+                {
+                    opcode: 'whenPinConnected',
+                    text: 'when pin [PIN] connected',
+                    blockType: BlockType.HAT,
+                    arguments: {
+                        PIN: {
+                            type: ArgumentType.STRING,
+                            menu: 'touchPins',
+                            defaultValue: '0'
+                        }
+                    }
                 }
             ],
             menus: {
@@ -475,7 +489,8 @@ class Scratch3MicroBitBlocks {
                 symbols: ['❤', '♫', '☓', '✓', '↑', '↓', '←', '→', '◯', '☀', '☺', '!', '?'],
                 tiltDirection: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT],
                 tiltDirectionAny:
-                    [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY]
+                    [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT, TiltDirection.ANY],
+                touchPins: ['0', '1', '2']
             }
         };
     }
@@ -637,6 +652,12 @@ class Scratch3MicroBitBlocks {
         default:
             log.warn(`Unknown tilt direction in _getTiltAngle: ${direction}`);
         }
+    }
+
+    whenPinConnected (args) {
+        var pin = parseInt(args.PIN);
+        if (isNaN(pin)) return;
+        return this._device._checkPinState(pin);
     }
 }
 
