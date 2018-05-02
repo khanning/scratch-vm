@@ -57,8 +57,13 @@ class MicroBit {
             buttonA: 0,
             buttonB: 0,
             touchPins: [0, 0, 0],
-            gestureState: 0
+            gestureState: 0,
+            inputPinData: [0, 0, 0]
         };
+
+        this._pinModes = [0, 0, 0];
+
+        this._servoValues = [0, 0, 0];
 
         this._gestures = {
             'moving': false,
@@ -140,8 +145,35 @@ class MicroBit {
         return this._gestures[g].active;
     }
 
+    _isValidPin (pin) {
+        pin = parseInt(pin);
+        if (isNaN(pin)) return false;
+        if (pin < 0 || pin > 2) return false;
+        return true;
+    }
+
     _checkPinState (pin) {
         return this._sensors.touchPins[pin];
+    }
+
+    _setPin (pin, mode, val) {
+        if (!_isValidPin(pin)) return;
+        this._pinModes[pin] = mode;
+        return;
+    }
+
+    _getPin (pin) {
+        if (!_isValidPin(pin)) return;
+        this._pinModes[pin] = mode;
+        return;
+    }
+
+    _setServo (pin, angle) {
+        this._servoValues[pin] = angle;
+    }
+
+    _getServo (pin) {
+        return this._servoValues[pin];
     }
 
     /**
@@ -172,17 +204,6 @@ class MicroBit {
      */
     _processData (data) {
 
-        //if (event.data[0] >> 7) {
-            //this._sensors.gf = 1;
-        //} else {
-            //if (this._sensors.gf) {
-                //this._sensors.gf = 0;
-                //this._runtime.greenFlag();
-            //}
-        //}
-
-        //this._sensors.brightness = (event.data[0] & 0x3F) << 4 | event.data[1] >> 4;
-
         this._sensors.tiltX = data[1] | (data[0] << 8);
         if (this._sensors.tiltX > (1 << 15)) this._sensors.tiltX -= (1 << 16);
         this._sensors.tiltY = data[3] | (data[2] << 8);;
@@ -197,36 +218,9 @@ class MicroBit {
 
         this._sensors.gestureState = data[9];
 
-        //var tmp = event.data[5] << 24;
-        //tmp |= event.data[6] << 16;
-        //tmp |= event.data[7] << 8;
-        //tmp |= event.data[8];
-        //tmp =  tmp / 10000000;
-        //this._sensors.aMagD = this._sensors.aMag - tmp;
-        //this._sensors.aMag = tmp;
-
-        //tmp = event.data[9] << 24;
-        //tmp |= event.data[10] << 16;
-        //tmp |= event.data[11] << 8;
-        //tmp |= event.data[12];
-        //tmp = tmp / 10000000;
-        //this._sensors.gMagD = this._sensors.gMag - tmp;
-        //this._sensors.gMag = tmp;
-
-        //if (Math.abs(this._sensors.aMagD) > 0.02) {
-            //this._gestures[Gesture.MOVING] = true;
-            //this._setGestureTimeout(Gesture.MOVE, 250);
-        //} else if (Math.abs(this._sensors.aMagD) < 0.006) {
-            //this._gestures[Gesture.MOVING] = false;
-        //}
-
-        //if (Math.abs(this._sensors.aMagD) > 0.8)
-            //this._setGestureTimeout(Gesture.SHAKE, 300);
-
-        //if (this._gestures[Gesture.JUMP].active && this._sensors.aMag > 0.5)
-            //this._gestures[Gesture.JUMP].active = false;
-        //else if (this._sensors.aMag < 0.2)
-            //this._gestures[Gesture.JUMP].active = true;
+        this._sensors.inputPinData[0] = data[10];
+        this._sensors.inputPinData[1] = data[11];
+        this._sensors.inputPinData[2] = data[12];
     }
 
     /**
@@ -483,6 +477,95 @@ class Scratch3MicroBitBlocks {
                             defaultValue: '0'
                         }
                     }
+                },
+                {
+                    opcode: 'setPinDigital',
+                    text: 'set pin [PIN] to [STATE]',
+                    blockType: BlockType.COMMAND,
+                    arguments: {
+                        PIN: {
+                            type: ArgumentType.STRING,
+                            menu: 'touchPins',
+                            defaultValue: '0'
+                        },
+                        STATE: {
+                            type: ArgumentType.STRING,
+                            menu: 'pinState',
+                            defaultValue: 'on'
+                        }
+                    }
+                },
+                {
+                    opcode: 'setPinAnalog',
+                    text: 'set pin [PIN] to [POWER]%',
+                    blockType: BlockType.COMMAND,
+                    arguments: {
+                        PIN: {
+                            type: ArgumentType.STRING,
+                            menu: 'touchPins',
+                            defaultValue: '0'
+                        },
+                        POWER: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: '50'
+                        }
+                    }
+                },
+                {
+                    opcode: 'readPinDigital',
+                    text: 'input pin [PIN]?',
+                    blockType: BlockType.BOOLEAN,
+                    arguments: {
+                        PIN: {
+                            type: ArgumentType.STRING,
+                            menu: 'touchPins',
+                            defaultValue: '0'
+                        }
+                    }
+                },
+                {
+                    opcode: 'readPinAnalog',
+                    text: 'input pin [PIN] value',
+                    blockType: BlockType.REPORTER,
+                    arguments: {
+                        PIN: {
+                            type: ArgumentType.STRING,
+                            menu: 'touchPins',
+                            defaultValue: '0'
+                        }
+                    }
+                },
+                {
+                    opcode: 'setServo',
+                    text: 'set servo [PIN] to [ANGLE]°',
+                    blockType: BlockType.COMMAND,
+                    arguments: {
+                        PIN: {
+                            type: ArgumentType.STRING,
+                            menu: 'touchPins',
+                            defaultValue: '0'
+                        },
+                        ANGLE: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: '180'
+                        }
+                    }
+                },
+                {
+                    opcode: 'changeServo',
+                    text: 'change servo [PIN] by [ANGLE]°',
+                    blockType: BlockType.COMMAND,
+                    arguments: {
+                        PIN: {
+                            type: ArgumentType.STRING,
+                            menu: 'touchPins',
+                            defaultValue: '0'
+                        },
+                        ANGLE: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: '20'
+                        }
+                    }
                 }
             ],
             menus: {
@@ -556,19 +639,25 @@ class Scratch3MicroBitBlocks {
     }
 
     displayText (args) {
-        window.postMessage({type: 'command', uuid: 'text', buffer: String(args.TEXT)}, '*');
+        var text = String(args.TEXT);
+        var buf = new Uint8Array(text.length+1);
+        buf[0] = 0x81;
+        for (var i=0; i < text.length; i++)
+            buf[i+1] = text.charCodeAt(i);
+        window.postMessage({type: 'command', buffer: buf}, '*');
         return;
     }
 
     displaySymbol (args) {
         var hex = symbols2hex[args.SYMBOL];
-        var output = new Uint8Array(5);
-        output[0] = (hex >> 20) & 0x1F;
-        output[1] = (hex >> 15) & 0x1F;
-        output[2] = (hex >> 10) & 0x1F;
-        output[3] = (hex >> 5) & 0x1F;
-        output[4] = hex & 0x1F;
-        window.postMessage({type: 'command', uuid: 'matrix', buffer: output}, '*');
+        var output = new Uint8Array(6);
+        output[0] = 0x82;
+        output[1] = (hex >> 20) & 0x1F;
+        output[2] = (hex >> 15) & 0x1F;
+        output[3] = (hex >> 10) & 0x1F;
+        output[4] = (hex >> 5) & 0x1F;
+        output[5] = hex & 0x1F;
+        window.postMessage({type: 'command', buffer: output}, '*');
         return;
     }
 
@@ -578,7 +667,10 @@ class Scratch3MicroBitBlocks {
         else if (args.STATE === 'off')
             ledMatrixState[args.X-1] &= ~(1 << args.Y-col);
         else return;
-        window.postMessage({type: 'command', uuid: 'matrix', buffer: ledMatrixState}, '*');
+        let tmp = new Uint8Array(6);
+        tmp[0] = 0x82;
+        tmp.set(ledMatrixState, 1);
+        window.postMessage({type: 'command', buffer: tmp}, '*');
         return;
     }
 
@@ -586,7 +678,10 @@ class Scratch3MicroBitBlocks {
         for (var i=0; i<5; i++) {
             ledMatrixState[i] = 0;
         }
-        window.postMessage({type: 'command', uuid: 'matrix', buffer: ledMatrixState}, '*');
+        let tmp = new Uint8Array(6);
+        tmp[0] = 0x82;
+        tmp.set(ledMatrixState, 1);
+        window.postMessage({type: 'command', buffer: tmp}, '*');
         return;
     }
 
@@ -661,6 +756,57 @@ class Scratch3MicroBitBlocks {
         var pin = parseInt(args.PIN);
         if (isNaN(pin)) return;
         return this._device._checkPinState(pin);
+    }
+
+    setPinDigital (args) {
+        return;
+    }
+
+    setPinAnalog (args) {
+        return;
+    }
+
+    readPinDigital (args) {
+        return 0;
+    }
+
+    readPinAnalog (args) {
+        return 0;
+    }
+
+    setServo (args) {
+        var pin = parseInt(args.PIN);
+        if (isNaN(pin)) return;
+        var angle = parseInt(args.ANGLE);
+        if (isNaN(angle)) return;
+        if (angle > 180) angle = 180;
+        else if (angle < 0) angle = 0;
+        this._device._setServo(pin, angle);
+        var output = new Uint8Array(4);
+        output[0] = 0x80;
+        output[1] = pin;
+        output[2] = 3;
+        output[3] = angle;
+        window.postMessage({type: 'command', buffer: output}, '*');
+        return;
+    }
+
+    changeServo (args) {
+        var pin = parseInt(args.PIN);
+        if (isNaN(pin)) return;
+        var angle = parseInt(args.ANGLE);
+        if (isNaN(angle)) return;
+        angle += this._device._getServo(pin);
+        if (angle > 180) angle = 180;
+        else if (angle < 0) angle = 0;
+        this._device._setServo(pin, angle);
+        var output = new Uint8Array(4);
+        output[0] = 0x80;
+        output[1] = pin;
+        output[2] = 3;
+        output[3] = angle;
+        window.postMessage({type: 'command', buffer: output}, '*');
+        return;
     }
 }
 
