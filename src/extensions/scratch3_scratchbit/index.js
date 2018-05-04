@@ -171,6 +171,8 @@ class ScratchBit {
      */
     _onRxChar (data) {
 
+      console.log(data);
+
         if (data[0] >> 7) {
             this._sensors.gf = 1;
         } else {
