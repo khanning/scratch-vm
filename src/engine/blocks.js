@@ -5,6 +5,7 @@ const MonitorRecord = require('./monitor-record');
 const Clone = require('../util/clone');
 const {Map} = require('immutable');
 const BlocksExecuteCache = require('./blocks-execute-cache');
+const log = require('../util/log');
 
 /**
  * @fileoverview
@@ -246,7 +247,7 @@ class Blocks {
     // ---------------------------------------------------------------------
 
     /**
-     * Create event listener for blocks and variables. Handles validation and
+     * Create event listener for blocks, variables, and comments. Handles validation and
      * serves as a generic adapter between the blocks, variables, and the
      * runtime interface.
      * @param {object} e Blockly "block" or "variable" event
@@ -255,7 +256,8 @@ class Blocks {
     blocklyListen (e, optRuntime) {
         // Validate event
         if (typeof e !== 'object') return;
-        if (typeof e.blockId !== 'string' && typeof e.varId !== 'string') {
+        if (typeof e.blockId !== 'string' && typeof e.varId !== 'string' &&
+            typeof e.commentId !== 'string') {
             return;
         }
         const stage = optRuntime.getTargetForStage();
@@ -293,8 +295,9 @@ class Blocks {
                 oldInput: e.oldInputName,
                 newParent: e.newParentId,
                 newInput: e.newInputName,
-                newCoordinate: e.newCoordinate
-            });
+                newCoordinate: e.newCoordinate,
+                oldCoordinate: e.oldCoordinate
+            }, optRuntime);
             break;
         case 'dragOutside':
             if (optRuntime) {
@@ -354,6 +357,74 @@ class Blocks {
             break;
         case 'var_delete':
             stage.deleteVariable(e.varId);
+            break;
+        case 'comment_create':
+            if (optRuntime && optRuntime.getEditingTarget()) {
+                const currTarget = optRuntime.getEditingTarget();
+                currTarget.createComment(e.commentId, e.blockId, e.text,
+                    e.xy.x, e.xy.y, e.width, e.height, e.minimized);
+            }
+            break;
+        case 'comment_change':
+            if (optRuntime && optRuntime.getEditingTarget()) {
+                const currTarget = optRuntime.getEditingTarget();
+                if (!currTarget.comments.hasOwnProperty(e.commentId)) {
+                    log.warn(`Cannot change comment with id ${e.commentId} because it does not exist.`);
+                    return;
+                }
+                const comment = currTarget.comments[e.commentId];
+                const change = e.newContents_;
+                if (typeof change === 'object') {
+                    if (change.hasOwnProperty('minimized')) {
+                        comment.minimized = change.minimized;
+                        break;
+                    } else if (change.hasOwnProperty('width') && change.hasOwnProperty('height')){
+                        comment.width = change.width;
+                        comment.height = change.height;
+                        break;
+                    }
+                } else if (typeof change === 'string') {
+                    comment.text = change;
+                    break;
+                }
+                log.warn(`Unrecognized comment change: ${
+                    JSON.stringify(change)} for comment with id: ${e.commentId}.`);
+                return;
+            }
+            break;
+        case 'comment_move':
+            if (optRuntime && optRuntime.getEditingTarget()) {
+                const currTarget = optRuntime.getEditingTarget();
+                if (currTarget && !currTarget.comments.hasOwnProperty(e.commentId)) {
+                    log.warn(`Cannot change comment with id ${e.commentId} because it does not exist.`);
+                    return;
+                }
+                const comment = currTarget.comments[e.commentId];
+                const newCoord = e.newCoordinate_;
+                comment.x = newCoord.x;
+                comment.y = newCoord.y;
+            }
+            break;
+        case 'comment_delete':
+            if (optRuntime && optRuntime.getEditingTarget()) {
+                const currTarget = optRuntime.getEditingTarget();
+                if (!currTarget.comments.hasOwnProperty(e.commentId)) {
+                    // If we're in this state, we have probably received
+                    // a delete event from a workspace that we switched from
+                    // (e.g. a delete event for a comment on sprite a's workspace
+                    // when switching from sprite a to sprite b)
+                    return;
+                }
+                delete currTarget.comments[e.commentId];
+                if (e.blockId) {
+                    const block = currTarget.blocks.getBlock(e.blockId);
+                    if (!block) {
+                        log.warn(`Could not find block referenced by comment with id: ${e.commentId}`);
+                        return;
+                    }
+                    delete block.comment;
+                }
+            }
             break;
         }
     }
@@ -481,8 +552,10 @@ class Blocks {
     /**
      * Block management: move blocks from parent to parent
      * @param {!object} e Blockly move event to be processed
+     * @param {?Runtime} optRuntime Optional runtime for updating the position
+     * of a comment on the block that moved.
      */
-    moveBlock (e) {
+    moveBlock (e, optRuntime) {
         if (!this._blocks.hasOwnProperty(e.id)) {
             return;
         }
@@ -491,6 +564,19 @@ class Blocks {
         if (e.newCoordinate) {
             this._blocks[e.id].x = e.newCoordinate.x;
             this._blocks[e.id].y = e.newCoordinate.y;
+
+            // If the moved block has a comment, update the position of the comment.
+            if (typeof this._blocks[e.id].comment === 'string' && optRuntime &&
+                e.oldCoordinate) {
+                const commentId = this._blocks[e.id].comment;
+                const currTarget = optRuntime.getEditingTarget();
+                if (currTarget && currTarget.comments.hasOwnProperty(commentId)) {
+                    const deltaX = e.newCoordinate.x - e.oldCoordinate.x;
+                    const deltaY = e.newCoordinate.y - e.oldCoordinate.y;
+                    currTarget.comments[commentId].x += deltaX;
+                    currTarget.comments[commentId].y += deltaY;
+                }
+            }
         }
 
         // Remove from any old parent.
@@ -734,19 +820,21 @@ class Blocks {
     /**
      * Encode all of `this._blocks` as an XML string usable
      * by a Blockly/scratch-blocks workspace.
+     * @param {object<string, Comment>} comments Map of comments referenced by id
      * @return {string} String of XML representing this object's blocks.
      */
-    toXML () {
-        return this._scripts.map(script => this.blockToXML(script)).join();
+    toXML (comments) {
+        return this._scripts.map(script => this.blockToXML(script, comments)).join();
     }
 
     /**
      * Recursively encode an individual block and its children
      * into a Blockly/scratch-blocks XML string.
      * @param {!string} blockId ID of block to encode.
+     * @param {object<string, Comment>} comments Map of comments referenced by id
      * @return {string} String of XML representing this block and any children.
      */
-    blockToXML (blockId) {
+    blockToXML (blockId, comments) {
         const block = this._blocks[blockId];
         // Encode properties of this block.
         const tagName = (block.shadow) ? 'shadow' : 'block';
@@ -756,6 +844,18 @@ class Blocks {
                 type="${block.opcode}"
                 ${block.topLevel ? `x="${block.x}" y="${block.y}"` : ''}
             >`;
+        const commentId = block.comment;
+        if (commentId) {
+            if (comments) {
+                if (comments.hasOwnProperty(commentId)) {
+                    xmlString += comments[commentId].toXML();
+                } else {
+                    log.warn(`Could not find comment with id: ${commentId} in provided comment descriptions.`);
+                }
+            } else {
+                log.warn(`Cannot serialize comment with id: ${commentId}; no comment descriptions provided.`);
+            }
+        }
         // Add any mutation. Must come before inputs.
         if (block.mutation) {
             xmlString += this.mutationToXML(block.mutation);
@@ -768,11 +868,11 @@ class Blocks {
             if (blockInput.block || blockInput.shadow) {
                 xmlString += `<value name="${blockInput.name}">`;
                 if (blockInput.block) {
-                    xmlString += this.blockToXML(blockInput.block);
+                    xmlString += this.blockToXML(blockInput.block, comments);
                 }
                 if (blockInput.shadow && blockInput.shadow !== blockInput.block) {
                     // Obscured shadow.
-                    xmlString += this.blockToXML(blockInput.shadow);
+                    xmlString += this.blockToXML(blockInput.shadow, comments);
                 }
                 xmlString += '</value>';
             }
@@ -798,7 +898,7 @@ class Blocks {
         }
         // Add blocks connected to the next connection.
         if (block.next) {
-            xmlString += `<next>${this.blockToXML(block.next)}</next>`;
+            xmlString += `<next>${this.blockToXML(block.next, comments)}</next>`;
         }
         xmlString += `</${tagName}>`;
         return xmlString;
