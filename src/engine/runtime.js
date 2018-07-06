@@ -1771,6 +1771,15 @@ class Runtime extends EventEmitter {
         return this._editingTarget;
     }
 
+    getAllVarNamesOfType (varType) {
+        let varNames = [];
+        for (const target of this.targets) {
+            const targetVarNames = target.getAllVariableNamesInScopeByType(varType, true);
+            varNames = varNames.concat(targetVarNames);
+        }
+        return varNames;
+    }
+
     /**
      * Tell the runtime to request a redraw.
      * Use after a clone/sprite has completed some visible operation on the stage.
