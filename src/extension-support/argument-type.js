@@ -26,7 +26,9 @@ const ArgumentType = {
     /**
      * String value with text field
      */
-    STRING: 'string'
+    STRING: 'string',
+    SCRATCHBIT: 'scratchbit',
+    SCRATCHBIT_ALL: 'scratchbit_all'
 };
 
 module.exports = ArgumentType;

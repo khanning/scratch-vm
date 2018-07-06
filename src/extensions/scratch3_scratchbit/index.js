@@ -2,14 +2,14 @@ const ArgumentType = require('../../extension-support/argument-type');
 const BlockType = require('../../extension-support/block-type');
 const color = require('../../util/color');
 const log = require('../../util/log');
+const cast = require('../../util/cast');
 
 /**
  * Icon svg to be displayed at the left edge of each extension block, encoded as a data URI.
  * @type {string}
  */
 // eslint-disable-next-line max-len
-
-const iconURI = 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhLS0gQ3JlYXRlZCB3aXRoIElua3NjYXBlIChodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy8pIC0tPgoKPHN2ZwogICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiCiAgIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyIKICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIKICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIgogICB4bWxuczpzb2RpcG9kaT0iaHR0cDovL3NvZGlwb2RpLnNvdXJjZWZvcmdlLm5ldC9EVEQvc29kaXBvZGktMC5kdGQiCiAgIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIgogICB3aWR0aD0iNjAuNDU5MTU2bW0iCiAgIGhlaWdodD0iNjAuNDU5MTZtbSIKICAgdmlld0JveD0iMCAwIDIxNC4yMjUzNiAyMTQuMjI1MzYiCiAgIGlkPSJzdmcyIgogICB2ZXJzaW9uPSIxLjEiCiAgIGlua3NjYXBlOnZlcnNpb249IjAuOTEgcjEzNzI1IgogICBzb2RpcG9kaTpkb2NuYW1lPSJTY3JhdGNoQml0LnN2ZyI+CiAgPGRlZnMKICAgICBpZD0iZGVmczQiPgogICAgPG1hcmtlcgogICAgICAgaW5rc2NhcGU6c3RvY2tpZD0iQXJyb3cxTHN0YXJ0IgogICAgICAgb3JpZW50PSJhdXRvIgogICAgICAgcmVmWT0iMCIKICAgICAgIHJlZlg9IjAiCiAgICAgICBpZD0ibWFya2VyNDQ2NCIKICAgICAgIHN0eWxlPSJvdmVyZmxvdzp2aXNpYmxlIgogICAgICAgaW5rc2NhcGU6aXNzdG9jaz0idHJ1ZSI+CiAgICAgIDxwYXRoCiAgICAgICAgIGlkPSJwYXRoNDQ2NiIKICAgICAgICAgZD0iTSAwLDAgNSwtNSAtMTIuNSwwIDUsNSAwLDAgWiIKICAgICAgICAgc3R5bGU9ImZpbGw6I2ZmN2YyYTtmaWxsLW9wYWNpdHk6MTtmaWxsLXJ1bGU6ZXZlbm9kZDtzdHJva2U6I2Q0NTUwMDtzdHJva2Utd2lkdGg6MXB0O3N0cm9rZS1vcGFjaXR5OjEiCiAgICAgICAgIHRyYW5zZm9ybT0ibWF0cml4KDAuOCwwLDAsMC44LDEwLDApIgogICAgICAgICBpbmtzY2FwZTpjb25uZWN0b3ItY3VydmF0dXJlPSIwIiAvPgogICAgPC9tYXJrZXI+CiAgICA8bWFya2VyCiAgICAgICBpbmtzY2FwZTpzdG9ja2lkPSJBcnJvdzFMc3RhcnQiCiAgICAgICBvcmllbnQ9ImF1dG8iCiAgICAgICByZWZZPSIwIgogICAgICAgcmVmWD0iMCIKICAgICAgIGlkPSJtYXJrZXI0NDQyIgogICAgICAgc3R5bGU9Im92ZXJmbG93OnZpc2libGUiCiAgICAgICBpbmtzY2FwZTppc3N0b2NrPSJ0cnVlIj4KICAgICAgPHBhdGgKICAgICAgICAgaWQ9InBhdGg0NDQ0IgogICAgICAgICBkPSJNIDAsMCA1LC01IC0xMi41LDAgNSw1IDAsMCBaIgogICAgICAgICBzdHlsZT0iZmlsbDojZmY3ZjJhO2ZpbGwtb3BhY2l0eToxO2ZpbGwtcnVsZTpldmVub2RkO3N0cm9rZTojZDQ1NTAwO3N0cm9rZS13aWR0aDoxcHQ7c3Ryb2tlLW9wYWNpdHk6MSIKICAgICAgICAgdHJhbnNmb3JtPSJtYXRyaXgoMC44LDAsMCwwLjgsMTAsMCkiCiAgICAgICAgIGlua3NjYXBlOmNvbm5lY3Rvci1jdXJ2YXR1cmU9IjAiIC8+CiAgICA8L21hcmtlcj4KICAgIDxtYXJrZXIKICAgICAgIGlua3NjYXBlOnN0b2NraWQ9IkFycm93MUxzdGFydCIKICAgICAgIG9yaWVudD0iYXV0byIKICAgICAgIHJlZlk9IjAiCiAgICAgICByZWZYPSIwIgogICAgICAgaWQ9IkFycm93MUxzdGFydCIKICAgICAgIHN0eWxlPSJvdmVyZmxvdzp2aXNpYmxlIgogICAgICAgaW5rc2NhcGU6aXNzdG9jaz0idHJ1ZSI+CiAgICAgIDxwYXRoCiAgICAgICAgIGlkPSJwYXRoNDE3MiIKICAgICAgICAgZD0iTSAwLDAgNSwtNSAtMTIuNSwwIDUsNSAwLDAgWiIKICAgICAgICAgc3R5bGU9ImZpbGw6I2ZmN2YyYTtmaWxsLW9wYWNpdHk6MTtmaWxsLXJ1bGU6ZXZlbm9kZDtzdHJva2U6I2Q0NTUwMDtzdHJva2Utd2lkdGg6MXB0O3N0cm9rZS1vcGFjaXR5OjEiCiAgICAgICAgIHRyYW5zZm9ybT0ibWF0cml4KDAuOCwwLDAsMC44LDEwLDApIgogICAgICAgICBpbmtzY2FwZTpjb25uZWN0b3ItY3VydmF0dXJlPSIwIiAvPgogICAgPC9tYXJrZXI+CiAgPC9kZWZzPgogIDxzb2RpcG9kaTpuYW1lZHZpZXcKICAgICBpZD0iYmFzZSIKICAgICBwYWdlY29sb3I9IiNmZmZmZmYiCiAgICAgYm9yZGVyY29sb3I9IiM2NjY2NjYiCiAgICAgYm9yZGVyb3BhY2l0eT0iMS4wIgogICAgIGlua3NjYXBlOnBhZ2VvcGFjaXR5PSIwLjAiCiAgICAgaW5rc2NhcGU6cGFnZXNoYWRvdz0iMiIKICAgICBpbmtzY2FwZTp6b29tPSIxLjQiCiAgICAgaW5rc2NhcGU6Y3g9IjE2MC4yNjU5MiIKICAgICBpbmtzY2FwZTpjeT0iMTE3Ljg5NzY2IgogICAgIGlua3NjYXBlOmRvY3VtZW50LXVuaXRzPSJweCIKICAgICBpbmtzY2FwZTpjdXJyZW50LWxheWVyPSJsYXllcjEiCiAgICAgc2hvd2dyaWQ9ImZhbHNlIgogICAgIHNob3dndWlkZXM9ImZhbHNlIgogICAgIGZpdC1tYXJnaW4tdG9wPSIyIgogICAgIGZpdC1tYXJnaW4tbGVmdD0iMiIKICAgICBmaXQtbWFyZ2luLXJpZ2h0PSIyIgogICAgIGZpdC1tYXJnaW4tYm90dG9tPSIyIgogICAgIGlua3NjYXBlOndpbmRvdy13aWR0aD0iMTE1OCIKICAgICBpbmtzY2FwZTp3aW5kb3ctaGVpZ2h0PSI3ODYiCiAgICAgaW5rc2NhcGU6d2luZG93LXg9IjIyOTQiCiAgICAgaW5rc2NhcGU6d2luZG93LXk9IjE0NSIKICAgICBpbmtzY2FwZTp3aW5kb3ctbWF4aW1pemVkPSIwIiAvPgogIDxtZXRhZGF0YQogICAgIGlkPSJtZXRhZGF0YTciPgogICAgPHJkZjpSREY+CiAgICAgIDxjYzpXb3JrCiAgICAgICAgIHJkZjphYm91dD0iIj4KICAgICAgICA8ZGM6Zm9ybWF0PmltYWdlL3N2Zyt4bWw8L2RjOmZvcm1hdD4KICAgICAgICA8ZGM6dHlwZQogICAgICAgICAgIHJkZjpyZXNvdXJjZT0iaHR0cDovL3B1cmwub3JnL2RjL2RjbWl0eXBlL1N0aWxsSW1hZ2UiIC8+CiAgICAgICAgPGRjOnRpdGxlIC8+CiAgICAgIDwvY2M6V29yaz4KICAgIDwvcmRmOlJERj4KICA8L21ldGFkYXRhPgogIDxnCiAgICAgaW5rc2NhcGU6bGFiZWw9IkxheWVyIDEiCiAgICAgaW5rc2NhcGU6Z3JvdXBtb2RlPSJsYXllciIKICAgICBpZD0ibGF5ZXIxIgogICAgIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xNDIuODg3MzIsLTY5NS4yNDk1KSI+CiAgICA8cGF0aAogICAgICAgc29kaXBvZGk6bm9kZXR5cGVzPSJzc3Nzc3NzIgogICAgICAgaW5rc2NhcGU6Y29ubmVjdG9yLWN1cnZhdHVyZT0iMCIKICAgICAgIGlkPSJwYXRoNDE2NCIKICAgICAgIGQ9Im0gMjE4LjI0NTg0LDcwMy4zNDQyIGMgLTIuMjM5OTMsMC44MTQ0MSAtNC43Nzc0NCwyLjYzODIgLTQuNzc3NDQsNC4xNzkyNCAwLDEuNTQxMDQgMi42MzM5MywyLjM3NTU3IDQuNzc3NDQsMS40NzU0NiAyNS41NTUzOCwtMTAuNzMxNDkgNDQuOTMwNzEsLTYuMzM3MTYgNjMuNTA4MywwIDIuMjc5NzksMC43Nzc2NyA0Ljc3NzQ2LDAuMDY1NSA0Ljc3NzQ2LC0xLjQ3NTQ2IDAsLTEuNTQxMDQgLTIuNDc4OTcsLTMuNDIyNTIgLTQuNzc3NDYsLTQuMTc5MjQgLTE4LjcwMTc2LC02LjE1NzA0IC00MC4yOTk4MiwtOC40MzgyNyAtNjMuNTA4MywwIHoiCiAgICAgICBzdHlsZT0ib3BhY2l0eToxO2ZpbGw6IzAwYzcwMDtmaWxsLW9wYWNpdHk6MTtzdHJva2U6bm9uZTtzdHJva2Utd2lkdGg6MS4xMzQzOTc2MztzdHJva2UtbWl0ZXJsaW1pdDo0O3N0cm9rZS1kYXNoYXJyYXk6bm9uZTtzdHJva2Utb3BhY2l0eToxIiAvPgogICAgPGVsbGlwc2UKICAgICAgIHN0eWxlPSJvcGFjaXR5OjE7ZmlsbDojZmZmZmZmO2ZpbGwtb3BhY2l0eToxO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxO3N0cm9rZS1taXRlcmxpbWl0OjQ7c3Ryb2tlLWRhc2hhcnJheTpub25lO3N0cm9rZS1vcGFjaXR5OjEiCiAgICAgICBpZD0icGF0aDQxNDAiCiAgICAgICBjeD0iMjUwIgogICAgICAgY3k9IjgwMi4zNjIxOCIKICAgICAgIHJ4PSI5OS41MjYwNjIiCiAgICAgICByeT0iOTkuNTI2MDciIC8+CiAgICA8cmVjdAogICAgICAgcnk9IjUuMDg4NzcwOSIKICAgICAgIHk9Ii0xODEuNjQxNjkiCiAgICAgICB4PSI3OTcuNzIwMjgiCiAgICAgICBoZWlnaHQ9IjE5LjI4Mzc2IgogICAgICAgd2lkdGg9IjkuMjgzNzYxIgogICAgICAgaWQ9InJlY3Q0MTQ2IgogICAgICAgc3R5bGU9Im9wYWNpdHk6MTtmaWxsOiNiM2IzYjM7ZmlsbC1vcGFjaXR5OjE7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjE7c3Ryb2tlLW1pdGVybGltaXQ6NDtzdHJva2UtZGFzaGFycmF5Om5vbmU7c3Ryb2tlLW9wYWNpdHk6MSIKICAgICAgIHRyYW5zZm9ybT0ibWF0cml4KDAsMSwtMSwwLDAsMCkiIC8+CiAgICA8Y2lyY2xlCiAgICAgICBzdHlsZT0ib3BhY2l0eToxO2ZpbGw6I2ZmN2YyYTtmaWxsLW9wYWNpdHk6MTtzdHJva2U6I2Q0NTUwMDtzdHJva2Utd2lkdGg6MS4yODgyNjUzNTtzdHJva2UtbWl0ZXJsaW1pdDo0O3N0cm9rZS1kYXNoYXJyYXk6bm9uZTtzdHJva2Utb3BhY2l0eToxIgogICAgICAgaWQ9InBhdGg0MTUwIgogICAgICAgY3g9IjI1MCIKICAgICAgIGN5PSI4MDIuMzYyMTgiCiAgICAgICByPSIzNS40MjcyOTYiIC8+CiAgICA8cGF0aAogICAgICAgc29kaXBvZGk6dHlwZT0ic3RhciIKICAgICAgIHN0eWxlPSJvcGFjaXR5OjE7ZmlsbDojYjNiM2IzO2ZpbGwtb3BhY2l0eToxO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjI1NzgxNzM5O3N0cm9rZS1taXRlcmxpbWl0OjQ7c3Ryb2tlLWRhc2hhcnJheTpub25lO3N0cm9rZS1vcGFjaXR5OjEiCiAgICAgICBpZD0icGF0aDQxNTIiCiAgICAgICBzb2RpcG9kaTpzaWRlcz0iMyIKICAgICAgIHNvZGlwb2RpOmN4PSIzNTIuNjAyMzYiCiAgICAgICBzb2RpcG9kaTpjeT0iNDM3Ljc3MzM4IgogICAgICAgc29kaXBvZGk6cjE9IjEyLjEwMjIzNCIKICAgICAgIHNvZGlwb2RpOnIyPSI3Ljk5MjM3NTkiCiAgICAgICBzb2RpcG9kaTphcmcxPSIwLjUyMzU5ODc4IgogICAgICAgc29kaXBvZGk6YXJnMj0iMS42NTUyNDk2IgogICAgICAgaW5rc2NhcGU6ZmxhdHNpZGVkPSJmYWxzZSIKICAgICAgIGlua3NjYXBlOnJvdW5kZWQ9IjAuMjIiCiAgICAgICBpbmtzY2FwZTpyYW5kb21pemVkPSIwIgogICAgICAgZD0ibSAzNjMuMDgzMiw0NDMuODI0NDkgYyAtMS40MjI0NCwyLjA0MzYyIC04LjY2NTEsMS45MTI3NiAtMTEuMTU1MDIsMS45MTI3OCAtMi4xOTgxMywxMGUtNiAtOC44NzIxMiwwLjA3NjggLTkuODA2NjcsLTEuOTEyNzggLTEuMDU4NiwtMi4yNTM2NyAyLjY3NjA2LC04LjQ2MDU3IDMuOTIxLC0xMC42MTY5MiAxLjA5OTA1LC0xLjkwMzYzIDQuMzY5NTYsLTcuNzIxODcgNi41NTk4NSwtNy41MzY0MyAyLjQ4MTA0LDAuMjEwMDYgNS45ODkwNCw2LjU0NzgyIDcuMjM0MDIsOC43MDQxNSAxLjA5OTA3LDEuOTAzNjIgNC41MDI1Niw3LjY0NTA4IDMuMjQ2ODIsOS40NDkyIHoiCiAgICAgICBpbmtzY2FwZTp0cmFuc2Zvcm0tY2VudGVyLXk9Ii0yLjU1MjQ5NzQiCiAgICAgICB0cmFuc2Zvcm09Im1hdHJpeCgwLjc0OTIzMTIzLDAsMCwwLjg0MzY0MDUzLC0xNC4yMTMwNzMsMzU1Ljc4ODA5KSIgLz4KICAgIDxyZWN0CiAgICAgICB0cmFuc2Zvcm09Im1hdHJpeCgwLDEsLTEsMCwwLDApIgogICAgICAgc3R5bGU9Im9wYWNpdHk6MTtmaWxsOiNiM2IzYjM7ZmlsbC1vcGFjaXR5OjE7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjE7c3Ryb2tlLW1pdGVybGltaXQ6NDtzdHJva2UtZGFzaGFycmF5Om5vbmU7c3Ryb2tlLW9wYWNpdHk6MSIKICAgICAgIGlkPSJyZWN0NDE1NiIKICAgICAgIHdpZHRoPSI5LjI4Mzc2MSIKICAgICAgIGhlaWdodD0iMTkuMjgzNzYiCiAgICAgICB4PSI3OTcuNzIwMjgiCiAgICAgICB5PSItMzM3LjY0MTY5IgogICAgICAgcnk9IjUuMDg4NzcwOSIgLz4KICAgIDxyZWN0CiAgICAgICByeT0iNS4wODg3NzA5IgogICAgICAgeT0iLTg5MC4wMDQyNyIKICAgICAgIHg9Ii0yNTQuNjQxODgiCiAgICAgICBoZWlnaHQ9IjE5LjI4Mzc2MiIKICAgICAgIHdpZHRoPSI5LjI4Mzc2MSIKICAgICAgIGlkPSJyZWN0NDE1OCIKICAgICAgIHN0eWxlPSJvcGFjaXR5OjE7ZmlsbDojYjNiM2IzO2ZpbGwtb3BhY2l0eToxO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxO3N0cm9rZS1taXRlcmxpbWl0OjQ7c3Ryb2tlLWRhc2hhcnJheTpub25lO3N0cm9rZS1vcGFjaXR5OjEiCiAgICAgICB0cmFuc2Zvcm09InNjYWxlKC0xLC0xKSIgLz4KICAgIDxwYXRoCiAgICAgICBzdHlsZT0ib3BhY2l0eToxO2ZpbGw6I2IzYjNiMztmaWxsLW9wYWNpdHk6MTtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS4wMDkwMjYxNztzdHJva2UtbWl0ZXJsaW1pdDo0O3N0cm9rZS1kYXNoYXJyYXk6bm9uZTtzdHJva2Utb3BhY2l0eToxIgogICAgICAgZD0ibSAyMTcuNjA3NzksNzUzLjgwMjA3IGMgLTIuMzQ0MDEsMS40ODYwMSAtNC45OTk0MSwyLjI3OTQzIC00Ljk5OTQxLDUuMDkxMjYgMCwyLjgxMTgzIDIuNzU2MzEsNC4zMzQ1NSA0Ljk5OTQxLDIuNjkyMTYgMjYuNzQyNzQsLTE5LjU4MTA0IDQ3LjAxODI4LC0xMS41NjMwMiA2Ni40NTkwNCwwIDIuMzg1NzEsMS40MTg5OCA0Ljk5OTQxLDAuMTE5NjcgNC45OTk0MSwtMi42OTIxNiAwLC0yLjgxMTgzIC0yLjU5NDEzLC0zLjcxMDUzIC00Ljk5OTQxLC01LjA5MTI2IC0xOS41NzA3LC0xMS4yMzQzNSAtNDIuMTcyMjUsLTE1LjM5Njc4IC02Ni40NTkwNCwwIHoiCiAgICAgICBpZD0icGF0aDQ1NDgiCiAgICAgICBpbmtzY2FwZTpjb25uZWN0b3ItY3VydmF0dXJlPSIwIgogICAgICAgc29kaXBvZGk6bm9kZXR5cGVzPSJzc3Nzc3NzIiAvPgogIDwvZz4KPC9zdmc+Cg==';
+const iconURI = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCI+PGRlZnM+PHN0eWxlPi5jbHMtMXtvcGFjaXR5OjAuMzt9LmNscy0xMCwuY2xzLTJ7b3BhY2l0eTowLjE7fS5jbHMtM3tmaWxsOiM0Y2JmNTY7fS5jbHMtNHtmaWxsOm5vbmU7c3Ryb2tlOiMwYjhlNjk7fS5jbHMtNCwuY2xzLTZ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLXdpZHRoOjAuNXB4O30uY2xzLTV7ZmlsbDojMGZiZDhjO30uY2xzLTZ7ZmlsbDojZmZmO3N0cm9rZTojZTZlNmU2O30uY2xzLTd7ZmlsbDojZmZhYjE5O30uY2xzLTh7ZmlsbDp1cmwoI2xpbmVhci1ncmFkaWVudCk7fS5jbHMtOXtmaWxsOnVybCgjbGluZWFyLWdyYWRpZW50LTIpO30uY2xzLTEwe2ZpbGw6IzIzMWYyMDt9LmNscy0xMXtmaWxsOiM3Yzg3YTU7fS5jbHMtMTJ7ZmlsbDp1cmwoI2xpbmVhci1ncmFkaWVudC0zKTt9LmNscy0xM3tmaWxsOnVybCgjbGluZWFyLWdyYWRpZW50LTQpO30uY2xzLTE0e2ZpbGw6I2U2ZTdlODt9PC9zdHlsZT48bGluZWFyR3JhZGllbnQgaWQ9ImxpbmVhci1ncmFkaWVudCIgeDE9IjEwIiB5MT0iMTgiIHgyPSIxMCIgeTI9IjIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMyMzFmMjAiLz48c3RvcCBvZmZzZXQ9IjAuMzMiIHN0b3AtY29sb3I9IiMyMzFmMjAiIHN0b3Atb3BhY2l0eT0iMC44OCIvPjxzdG9wIG9mZnNldD0iMC42OCIgc3RvcC1jb2xvcj0iIzIzMWYyMCIgc3RvcC1vcGFjaXR5PSIwLjUxIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMjMxZjIwIiBzdG9wLW9wYWNpdHk9IjAiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0ibGluZWFyLWdyYWRpZW50LTIiIHgxPSIxMCIgeTE9IjYuNTUiIHgyPSIxMCIgeTI9IjEzLjQ1IiB4bGluazpocmVmPSIjbGluZWFyLWdyYWRpZW50Ii8+PGxpbmVhckdyYWRpZW50IGlkPSJsaW5lYXItZ3JhZGllbnQtMyIgeDE9IjMyMjAuMzIiIHkxPSItNjk0IiB4Mj0iMzIyMy42OSIgeTI9Ii02OTQiIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoNzA0IDMyMzIpIHJvdGF0ZSgtOTApIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZhYjE5Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjZmZhYjE5IiBzdG9wLW9wYWNpdHk9IjAiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0ibGluZWFyLWdyYWRpZW50LTQiIHgxPSIxMCIgeTE9IjcuMDUiIHgyPSIxMCIgeTI9IjEyLjk1IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMjMxZjIwIi8+PHN0b3Agb2Zmc2V0PSIwLjIxIiBzdG9wLWNvbG9yPSIjMjMxZjIwIiBzdG9wLW9wYWNpdHk9IjAuODgiLz48c3RvcCBvZmZzZXQ9IjAuNDMiIHN0b3AtY29sb3I9IiMyMzFmMjAiIHN0b3Atb3BhY2l0eT0iMC41MSIvPjxzdG9wIG9mZnNldD0iMC42MyIgc3RvcC1jb2xvcj0iIzIzMWYyMCIgc3RvcC1vcGFjaXR5PSIwIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHRpdGxlPlNCPC90aXRsZT48ZyBpZD0iQml0Ij48cGF0aCBjbGFzcz0iY2xzLTMiIGQ9Ik0xMywxLjlWOS4yMmEuMjQuMjQsMCwwLDEtLjI0LjI0SDcuMjhBLjI0LjI0LDAsMCwxLDcsOS4yMlYxLjlhLjUzLjUzLDAsMCwxLC4zNi0uNWwuNDQtLjEzYS4yMy4yMywwLDAsMSwuMTYsMGwuMSwwYS4yLjIsMCwwLDAsLjE3LS4wOS4yMi4yMiwwLDAsMSwuMTQtLjA4bC4zNi0uMDZhLjI0LjI0LDAsMCwxLC4xNiwwLC4yMS4yMSwwLDAsMCwuMTIsMCwuMi4yLDAsMCwwLC4xNS0uMDZBLjE5LjE5LDAsMCwxLDkuMzUsMWwuMzYsMGEuMy4zLDAsMCwxLC4xNi4wNS4xOS4xOSwwLDAsMCwuMjYsMEEuMy4zLDAsMCwxLDEwLjI5LDFsLjM2LDBhLjE5LjE5LDAsMCwxLC4xNS4wNy4yLjIsMCwwLDAsLjE1LjA2LjIxLjIxLDAsMCwwLC4xMiwwLC4zMi4zMiwwLDAsMSwuMTYsMGwuMzcuMDZhLjIuMiwwLDAsMSwuMTMuMDkuMjEuMjEsMCwwLDAsLjE3LjA4LjIzLjIzLDAsMCwwLC4xNi0uMDZoMGE1LjQ0LDUuNDQsMCwwLDEsLjU0LjE1QS41My41MywwLDAsMSwxMywxLjlaIi8+PHBhdGggY2xhc3M9ImNscy00IiBkPSJNMTMsMS45VjkuMjJhLjI0LjI0LDAsMCwxLS4yNC4yNEg3LjI4QS4yNC4yNCwwLDAsMSw3LDkuMjJWMS45YS41My41MywwLDAsMSwuMzYtLjVsLjQ0LS4xM2EuMjMuMjMsMCwwLDEsLjE2LDBsLjEsMGEuMi4yLDAsMCwwLC4xNy0uMDkuMjIuMjIsMCwwLDEsLjE0LS4wOGwuMzYtLjA2YS4yNC4yNCwwLDAsMSwuMTYsMCwuMjEuMjEsMCwwLDAsLjEyLDAsLjIuMiwwLDAsMCwuMTUtLjA2QS4xOS4xOSwwLDAsMSw5LjM1LDFsLjM2LDBhLjMuMywwLDAsMSwuMTYuMDUuMTkuMTksMCwwLDAsLjI2LDBBLjMuMywwLDAsMSwxMC4yOSwxbC4zNiwwYS4xOS4xOSwwLDAsMSwuMTUuMDcuMi4yLDAsMCwwLC4xNS4wNi4yMS4yMSwwLDAsMCwuMTIsMCwuMzIuMzIsMCwwLDEsLjE2LDBsLjM3LjA2YS4yLjIsMCwwLDEsLjEzLjA5LjIxLjIxLDAsMCwwLC4xNy4wOC4yMy4yMywwLDAsMCwuMTYtLjA2aDBhNS40NCw1LjQ0LDAsMCwxLC41NC4xNUEuNTMuNTMsMCwwLDEsMTMsMS45WiIvPjxwYXRoIGNsYXNzPSJjbHMtNSIgZD0iTTEzLDEuOVY5LjIyYS4yNC4yNCwwLDAsMS0uMjQuMjRINy4yOEEuMjQuMjQsMCwwLDEsNyw5LjIyVjEuOWEuNTMuNTMsMCwwLDEsLjM2LS41bC40NC0uMTNhLjIzLjIzLDAsMCwxLC4xNiwwbC4xLDBhLjIuMiwwLDAsMCwuMTctLjA5LjIyLjIyLDAsMCwxLC4xNC0uMDhsLjM2LS4wNmEuMjQuMjQsMCwwLDEsLjE2LDAsLjIxLjIxLDAsMCwwLC4xMiwwLC4yLjIsMCwwLDAsLjE1LS4wNkEuMTkuMTksMCwwLDEsOS4zNSwxbC4zNiwwYS4zLjMsMCwwLDEsLjE2LjA1LjE5LjE5LDAsMCwwLC4yNiwwQS4zLjMsMCwwLDEsMTAuMjksMWwuMzYsMGEuMTkuMTksMCwwLDEsLjE1LjA3LjIuMiwwLDAsMCwuMTUuMDYuMjEuMjEsMCwwLDAsLjEyLDAsLjMyLjMyLDAsMCwxLC4xNiwwbC4zNy4wNmEuMi4yLDAsMCwxLC4xMy4wOS4yMS4yMSwwLDAsMCwuMTcuMDguMjMuMjMsMCwwLDAsLjE2LS4wNmgwYTUuNDQsNS40NCwwLDAsMSwuNTQuMTVBLjUzLjUzLDAsMCwxLDEzLDEuOVoiLz48Y2lyY2xlIGNsYXNzPSJjbHMtNiIgY3g9IjEwIiBjeT0iMTAiIHI9IjgiLz48Y2lyY2xlIGNsYXNzPSJjbHMtNyIgY3g9IjEwIiBjeT0iMTAiIHI9IjIuOTUiLz48ZyBjbGFzcz0iY2xzLTIiPjxwYXRoIGNsYXNzPSJjbHMtOCIgZD0iTTEwLDIuNUE3LjUsNy41LDAsMSwxLDIuNSwxMCw3LjUsNy41LDAsMCwxLDEwLDIuNU0xMCwyYTgsOCwwLDEsMCw4LDgsOCw4LDAsMCwwLTgtOFoiLz48L2c+PGcgY2xhc3M9ImNscy0yIj48cGF0aCBjbGFzcz0iY2xzLTkiIGQ9Ik0xMCw3LjA1YTMsMywwLDEsMS0yLjk1LDMsMi45NSwyLjk1LDAsMCwxLDMtMi45NW0wLS41QTMuNDUsMy40NSwwLDEsMCwxMy40NSwxMCwzLjQ2LDMuNDYsMCwwLDAsMTAsNi41NVoiLz48L2c+PGNpcmNsZSBjbGFzcz0iY2xzLTEwIiBjeD0iMTAiIGN5PSIxMCIgcj0iMi4xMSIvPjxwYXRoIGNsYXNzPSJjbHMtMTEiIGQ9Ik05Ljk0LDMuM2EuMDguMDgsMCwwLDEsLjEzLDBsLjIuMzUuMi4zNGEuMDcuMDcsMCwwLDEtLjA2LjExaC0uOEEuMDcuMDcsMCwwLDEsOS41NCw0bC4yLS4zNFoiLz48Y2lyY2xlIGNsYXNzPSJjbHMtMTIiIGN4PSIxMCIgY3k9IjEwIiByPSIxLjY4Ii8+PGcgY2xhc3M9ImNscy0yIj48cGF0aCBjbGFzcz0iY2xzLTEzIiBkPSJNMTAsNy41NUEyLjQ1LDIuNDUsMCwxLDEsNy41NSwxMCwyLjQ1LDIuNDUsMCwwLDEsMTAsNy41NW0wLS41QTMsMywwLDEsMCwxMywxMCwyLjk1LDIuOTUsMCwwLDAsMTAsNy4wNVoiLz48L2c+PHJlY3QgY2xhc3M9ImNscy0xMSIgeD0iMy4yNiIgeT0iOS41OCIgd2lkdGg9IjAuODQiIGhlaWdodD0iMC40MiIgcng9IjAuMjEiIHJ5PSIwLjIxIi8+PHJlY3QgY2xhc3M9ImNscy0xMSIgeD0iMTUuODkiIHk9IjkuNTgiIHdpZHRoPSIwLjg0IiBoZWlnaHQ9IjAuNDIiIHJ4PSIwLjIxIiByeT0iMC4yMSIvPjxyZWN0IGNsYXNzPSJjbHMtMTEiIHg9IjkuNTgiIHk9IjE1Ljg5IiB3aWR0aD0iMC44NCIgaGVpZ2h0PSIwLjQyIiByeD0iMC4yMSIgcnk9IjAuMjEiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDI2LjEgNi4xKSByb3RhdGUoOTApIi8+PHBhdGggY2xhc3M9ImNscy0xNCIgZD0iTTEzLjM3LDdBLjI1LjI1LDAsMCwxLDEzLjIxLDdhLjM5LjM5LDAsMCwwLS4wOC0uMSw0LjQ0LDQuNDQsMCwwLDAtNi4yNiwwLC4zOS4zOSwwLDAsMC0uMDguMS4yMy4yMywwLDAsMS0uMywwLC4yMS4yMSwwLDAsMSwwLS4zLjQ3LjQ3LDAsMCwxLC4xLS4xLDQuODMsNC44MywwLDAsMSw2Ljg0LDAsLjQ3LjQ3LDAsMCwxLC4xLjEuMjEuMjEsMCwwLDEsMCwuM0EuMjQuMjQsMCwwLDEsMTMuMzcsN1oiLz48ZyBjbGFzcz0iY2xzLTIiPjxwYXRoIGQ9Ik0xMC4yOSwxbC4zNiwwYS4yMi4yMiwwLDAsMSwuMTUuMDYuMTcuMTcsMCwwLDAsLjE1LjA3LjIxLjIxLDAsMCwwLC4xMiwwLC4xOS4xOSwwLDAsMSwuMTIsMGgwbC4zNy4wNmEuMjIuMjIsMCwwLDEsLjEzLjA4LjIuMiwwLDAsMCwuMzIsMGgwbC41NC4xNmEuNTIuNTIsMCwwLDEsLjM2LjV2LjY3QTgsOCwwLDEsMSw3LDIuNTdWMS45YS41Mi41MiwwLDAsMSwuMzYtLjVsLjQzLS4xM2guMDhsLjA5LDBhLjE1LjE1LDAsMCwwLC4xLDAsLjIuMiwwLDAsMCwuMTctLjA5LjIyLjIyLDAsMCwxLC4xMy0uMDhsLjM3LS4wNmgwYS4yNy4yNywwLDAsMSwuMTIsMCwuMTYuMTYsMCwwLDAsLjEyLDAsLjE4LjE4LDAsMCwwLC4xNS0uMDdBLjIyLjIyLDAsMCwxLDkuMzUsMWwuMzYsMGEuMi4yLDAsMCwxLC4xNS4wNS4yMi4yMiwwLDAsMCwuMjgsMEEuMi4yLDAsMCwxLDEwLjI5LDFtMC0uNUEuOTMuOTMsMCwwLDAsMTAsLjU1Ljg0Ljg0LDAsMCwwLDkuNzEuNWwtLjQsMEEuNzUuNzUsMCwwLDAsOSwuNjFhLjY0LjY0LDAsMCwwLS4yLDBIOC42OEw4LjMxLjY1QS44MS44MSwwLDAsMCw4LC43N0g3LjkxYS43Ni43NiwwLDAsMC0uMjEsMEw3LjI1LjkyYTEsMSwwLDAsMC0uNzEsMXYuMzRBOC41LDguNSwwLDEsMCwxOC41LDEwYTguNDQsOC40NCwwLDAsMC01LTcuNzZWMS45YTEsMSwwLDAsMC0uNy0xYy0uMi0uMDctLjM5LS4xMi0uNTgtLjE3bC0uMDYsMGgtLjE5YS45Mi45MiwwLDAsMC0uMjUtLjA5Yy0uMTIsMC0uMjUtLjA1LS4zOC0uMDZoLS4xMWEuNjkuNjksMCwwLDAtLjIsMEEuNzUuNzUsMCwwLDAsMTAuNy41MmwtLjM5LDBoMFoiLz48L2c+PC9nPjwvc3ZnPg==';
 
 /**
  * Manage communication with a ScratchBit device over a Device Manager client socket.
@@ -171,8 +171,6 @@ class ScratchBit {
      */
     _onRxChar (data) {
 
-      console.log(data);
-
         if (data[0] >> 7) {
             this._sensors.gf = 1;
         } else {
@@ -282,11 +280,11 @@ const DEV_SPEC = {
  * @enum {string}
  */
 const TiltDirection = {
-    FRONT: 'front',
-    BACK: 'back',
-    LEFT: 'left',
-    RIGHT: 'right',
-    ANY: 'any'
+    FRONT: '1',
+    BACK: '2',
+    LEFT: '3',
+    RIGHT: '4',
+    ANY: '5'
 };
 
 const Gesture = {
@@ -305,7 +303,7 @@ class Scratch3ScratchBitBlocks {
      * @return {string} - the name of this extension.
      */
     static get EXTENSION_NAME() {
-        return 'ScratchBit';
+        return 'ScratchIt';
     }
 
     /**
@@ -354,38 +352,37 @@ class Scratch3ScratchBitBlocks {
             blockIconURI: iconURI,
             blocks: [
                 {
+                    opcode: 'whenGesture',
+                    text: 'when [GESTURE]',
+                    blockType: BlockType.HAT,
+                    arguments: {
+                        GESTURE: {
+                            type: ArgumentType.STRING,
+                            menu: 'GESTURES',
+                            defaultValue: 'moved'
+                        }
+                    }
+
+                },
+                {
                     opcode: 'whenPressed',
                     text: 'when button pressed',
                     blockType: BlockType.HAT
                 },
                 {
-                    opcode: 'isPressed',
-                    text: 'button pressed?',
-                    blockType: BlockType.BOOLEAN
-                },
-                {
-                    opcode: 'whenMoved',
-                    text: 'when moved',
-                    blockType: BlockType.HAT
-                },
-                {
-                    opcode: 'whenShaken',
-                    text: 'when shaken',
-                    blockType: BlockType.HAT
-                },
-                {
-                    opcode: 'whenJumped',
-                    text: 'when jumped',
-                    blockType: BlockType.HAT
-                },
-                {
-                    opcode: 'isMoving',
-                    text: 'moving?',
-                    blockType: BlockType.BOOLEAN
+                    opcode: 'whenTilted',
+                    text: 'when tilted [DIRECTION]?',
+                    blockType: BlockType.HAT,
+                    arguments: {
+                        DIRECTION: {
+                            type: ArgumentType.SCRATCHBIT_ALL,
+                            defaultValue: TiltDirection.ANY
+                        }
+                    }
                 },
                 {
                     opcode: 'whenDark',
-                    text: 'when it becomes [LIGHT]',
+                    text: 'when it gets [LIGHT]',
                     blockType: BlockType.HAT,
                     arguments: {
                         LIGHT: {
@@ -395,22 +392,16 @@ class Scratch3ScratchBitBlocks {
                         }
                     }
                 },
+                '---',
                 {
-                    opcode: 'getBrightness',
-                    text: 'brightness',
-                    blockType: BlockType.REPORTER
+                    opcode: 'isResting',
+                    text: 'at rest?',
+                    blockType: BlockType.BOOLEAN
                 },
                 {
-                    opcode: 'whenTilted',
-                    text: 'when tilted [DIRECTION]?',
-                    blockType: BlockType.HAT,
-                    arguments: {
-                        DIRECTION: {
-                            type: ArgumentType.STRING,
-                            menu: 'tiltDirectionAny',
-                            defaultValue: TiltDirection.ANY
-                        }
-                    }
+                    opcode: 'isPressed',
+                    text: 'button pressed?',
+                    blockType: BlockType.BOOLEAN
                 },
                 {
                     opcode: 'isTilted',
@@ -418,24 +409,27 @@ class Scratch3ScratchBitBlocks {
                     blockType: BlockType.BOOLEAN,
                     arguments: {
                         DIRECTION: {
-                            type: ArgumentType.STRING,
-                            menu: 'tiltDirectionAny',
+                            type: ArgumentType.SCRATCHBIT_ALL,
                             defaultValue: TiltDirection.ANY
                         }
                     }
                 },
-                {
-                    opcode: 'getTiltAngle',
-                    text: 'tilt angle [DIRECTION]',
-                    blockType: BlockType.REPORTER,
-                    arguments: {
-                        DIRECTION: {
-                            type: ArgumentType.STRING,
-                            menu: 'tiltDirection',
-                            defaultValue: TiltDirection.FRONT
-                        }
-                    }
-                },
+                '---',
+                // {
+                    // opcode: 'whenMoved',
+                    // text: 'when moved',
+                    // blockType: BlockType.HAT
+                // },
+                // {
+                    // opcode: 'whenShaken',
+                    // text: 'when shaken',
+                    // blockType: BlockType.HAT
+                // },
+                // {
+                    // opcode: 'whenJumped',
+                    // text: 'when jumped',
+                    // blockType: BlockType.HAT
+                // },
                 {
                     opcode: 'getSpin',
                     text: 'spin',
@@ -445,9 +439,26 @@ class Scratch3ScratchBitBlocks {
                     opcode: 'getSpeed',
                     text: 'speed',
                     blockType: BlockType.REPORTER
+                },
+                {
+                    opcode: 'getBrightness',
+                    text: 'brightness',
+                    blockType: BlockType.REPORTER
+                },
+                {
+                    opcode: 'getTiltAngle',
+                    text: 'tilt angle [DIRECTION]',
+                    blockType: BlockType.REPORTER,
+                    arguments: {
+                        DIRECTION: {
+                            type: ArgumentType.SCRATCHBIT,
+                            defaultValue: TiltDirection.RIGHT
+                        }
+                    }
                 }
             ],
             menus: {
+                GESTURES: ['moved', 'shaken', 'jumped'],
                 lightLevel: ['dark', 'bright'],
                 tiltDirection: [TiltDirection.FRONT, TiltDirection.BACK, TiltDirection.LEFT, TiltDirection.RIGHT],
                 tiltDirectionAny:
@@ -499,20 +510,32 @@ class Scratch3ScratchBitBlocks {
         return this._device._isPressed();
     }
 
-    whenMoved () {
-        return this._device._isGesture(Gesture.MOVE);
+    whenGesture (args) {
+        let gesture = cast.toString(args.GESTURE);
+        if (gesture === 'moved') {
+            return this._device._isGesture(Gesture.MOVE);
+        } else if (gesture === 'shaken') {
+            return this._device._isGesture(Gesture.SHAKE);
+        } else if (gesture === 'jumped') {
+            return this._device._isGesture(Gesture.JUMP);
+        }
+        return false;
     }
 
-    whenShaken () {
-        return this._device._isGesture(Gesture.SHAKE);
-    }
+    // whenMoved () {
+        // return this._device._isGesture(Gesture.MOVE);
+    // }
 
-    whenJumped () {
-        return this._device._isGesture(Gesture.JUMP);
-    }
+    // whenShaken () {
+        // return this._device._isGesture(Gesture.SHAKE);
+    // }
 
-    isMoving () {
-        return this._device._gestures['moving'];
+    // whenJumped () {
+        // return this._device._isGesture(Gesture.JUMP);
+    // }
+
+    isResting () {
+        return !this._device._gestures['moving'];
     }
 
     /**
@@ -581,6 +604,7 @@ class Scratch3ScratchBitBlocks {
      * @private
      */
     _isTilted (direction) {
+        direction = cast.toString(direction);
         switch (direction) {
         case TiltDirection.ANY:
             return (Math.abs(this._device.tiltX) >= Scratch3ScratchBitBlocks.TILT_THRESHOLD) ||
@@ -597,6 +621,7 @@ class Scratch3ScratchBitBlocks {
      * @private
      */
     _getTiltAngle (direction) {
+        direction = cast.toString(direction);
         switch (direction) {
         case TiltDirection.FRONT:
             return this._device.tiltY;
