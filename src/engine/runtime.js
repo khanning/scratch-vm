@@ -58,6 +58,14 @@ const ArgumentTypeMap = (() => {
     map[ArgumentType.BOOLEAN] = {
         check: 'Boolean'
     };
+    map[ArgumentType.SCRATCHBIT] = {
+        shadowType: 'scratchbit',
+        fieldType: 'SCRATCHBIT'
+    };
+    map[ArgumentType.SCRATCHBIT_ALL] = {
+        shadowType: 'scratchbit_all',
+        fieldType: 'SCRATCHBIT_ALL'
+    };
     return map;
 })();
 
