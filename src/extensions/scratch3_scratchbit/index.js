@@ -293,7 +293,7 @@ class Scratch3ScratchBitBlocks {
      * @return {string} - the name of this extension.
      */
     static get EXTENSION_NAME() {
-        return 'ScratchGo';
+        return 'ScratchBit';
     }
 
     /**

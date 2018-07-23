@@ -27,8 +27,17 @@ const ArgumentType = {
      * String value with text field
      */
     STRING: 'string',
+
+    /**
+     * String value with scratchbit field
+     */
     SCRATCHBIT: 'scratchbit',
-    SCRATCHBIT_ALL: 'scratchbit_all'
+    SCRATCHBIT_ALL: 'scratchbit_all',
+
+    /**
+     * String value with matirx field
+     */
+    MATRIX: 'matrix'
 };
 
 module.exports = ArgumentType;
