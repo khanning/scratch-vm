@@ -39,7 +39,8 @@ const defaultBlockPackages = {
     scratch3_sound: require('../blocks/scratch3_sound'),
     scratch3_sensing: require('../blocks/scratch3_sensing'),
     scratch3_data: require('../blocks/scratch3_data'),
-    scratch3_procedures: require('../blocks/scratch3_procedures')
+    scratch3_procedures: require('../blocks/scratch3_procedures'),
+    scratch3_microworld: require('../blocks/scratch3_microworld')
 };
 
 const defaultExtensionColors = ['#0FBD8C', '#0DA57A', '#0B8E69'];
@@ -392,6 +393,10 @@ class Runtime extends EventEmitter {
          * @type {function}
          */
         this.removeCloudVariable = this._initializeRemoveCloudVariable(newCloudDataManager);
+
+        this.nativeSensors = {
+            movement: 0
+        };
     }
 
     /**
@@ -1361,6 +1366,14 @@ class Runtime extends EventEmitter {
         context.argsMap[placeholder] = argNum;
 
         return `%${argNum}`;
+    }
+
+    postSensors (sensors) {
+        this.nativeSensors.movement = sensors;
+    }
+
+    getMovement () {
+        return this.nativeSensors.movement;
     }
 
     /**
